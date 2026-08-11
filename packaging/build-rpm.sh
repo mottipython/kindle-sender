@@ -35,7 +35,23 @@ else
 fi
 
 echo "source: $tarball"
-rpmbuild -ba "packaging/$name.spec"
+
+if ! rpmbuild -ba "packaging/$name.spec"; then
+    cat >&2 <<'MSG'
+
+--------------------------------------------------------------------
+If that failed on "Failed build dependencies", install them and retry:
+
+    sudo dnf builddep ~/rpmbuild/SRPMS/kindle-sender-*.nosrc.rpm
+
+Recent Fedora no longer ships setuptools with the system Python, so on
+a clean machine this usually means:
+
+    sudo dnf install python3-setuptools python3-pip python3-wheel
+--------------------------------------------------------------------
+MSG
+    exit 1
+fi
 
 echo
 echo "Built:"
