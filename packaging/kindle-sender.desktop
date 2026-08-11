@@ -1,0 +1,13 @@
+[Desktop Entry]
+Type=Application
+Name=Kindle Sender
+GenericName=Ebook Sender
+Comment=Fix EPUBs for Kindle and send them to your device by email
+Exec=kindle-sender %F
+TryExec=kindle-sender
+Icon=kindle-sender
+Terminal=false
+Categories=Office;Viewer;Literature;
+MimeType=application/epub+zip;application/x-mobipocket-ebook;application/vnd.amazon.ebook;
+Keywords=kindle;epub;ebook;calibre;
+StartupNotify=true
