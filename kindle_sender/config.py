@@ -18,7 +18,12 @@ CALIBRE_SMTP = os.path.expanduser("~/.config/calibre/smtp.py.json")
 KEYRING_SERVICE = "kindle-sender"
 
 APP_PASSWORD_URL = "https://myaccount.google.com/apppasswords"
-AMAZON_SENDERS_URL = "https://www.amazon.com/hz/mycd/digital-console/alldevices"
+# Lists every registered device with its individual @kindle.com address.
+AMAZON_DEVICES_URL = "https://www.amazon.com/hz/mycd/digital-console/alldevices"
+# Preferences -> Personal Document Settings, where the approved sender list is.
+AMAZON_SENDERS_URL = "https://www.amazon.com/hz/mycd/myx#/home/settings/pdoc"
+
+VALID_KINDLE_DOMAINS = ("@kindle.com", "@free.kindle.com")
 
 DEFAULTS = {
     "smtp_host": "smtp.gmail.com",
@@ -38,10 +43,43 @@ DEFAULTS = {
     "do_send": True,
     "default_lang": "en",
     "max_attach_mb": 45,
+    "kindle_addr_verified": False,
 }
 
 # Keys never written to the JSON file.
 _SECRET_KEYS = ("smtp_password",)
+# Derived at load time, so writing them back would make them self-fulfilling.
+_RUNTIME_KEYS = ("calibre_kindle_addr",)
+
+
+def is_calibre_guess(cfg, addr):
+    """True while the Kindle address is still the one copied out of calibre.
+
+    Saving must not clear this: the app auto-saves when you press Send, so
+    keying the warning off "has been saved" would retire it without anyone
+    having actually checked the address. Only editing it, or explicitly
+    marking it verified, counts.
+    """
+    guess = (cfg.get("calibre_kindle_addr") or "").strip().lower()
+    return bool(
+        guess and (addr or "").strip().lower() == guess and not cfg.get("kindle_addr_verified")
+    )
+
+
+def kindle_address_warning(addr):
+    """Return a warning about a Send-to-Kindle address, or None if it looks OK.
+
+    Worth being fussy: every way of getting this wrong fails the same silent
+    way, so a typo looks exactly like a working setup from inside the app.
+    """
+    addr = (addr or "").strip().lower()
+    if not addr:
+        return None
+    if not addr.endswith(VALID_KINDLE_DOMAINS):
+        return "That is not a Send-to-Kindle address — it should end in @kindle.com."
+    if addr.count("@") != 1 or not addr.split("@")[0]:
+        return "That address looks malformed."
+    return None
 
 
 # ---------------------------------------------------------------- the wallet
@@ -120,12 +158,15 @@ def exists():
 
 def load():
     cfg = dict(DEFAULTS)
-    cfg.update(_from_calibre())
+    seed = _from_calibre()
+    cfg.update(seed)
+    saved = {}
     try:
         with open(CONFIG_PATH) as fh:
-            cfg.update(json.load(fh))
+            saved = json.load(fh)
     except (OSError, ValueError):
         pass
+    cfg.update(saved)
 
     if not cfg.get("smtp_password"):
         kr = _keyring()
@@ -134,13 +175,22 @@ def load():
                 cfg["smtp_password"] = kr.get_password(KEYRING_SERVICE, _keyring_account(cfg)) or ""
             except Exception:
                 pass
+
+    # A Kindle address seeded from calibre is a guess: calibre's copy is often
+    # stale, and a wrong @kindle.com address fails *silently* — Amazon accepts
+    # the mail and drops it, with no bounce and no confirmation. Remember what
+    # the guess was so the UI can keep flagging it until it is changed or
+    # explicitly verified.
+    cfg["calibre_kindle_addr"] = seed.get("kindle_addr", "")
     return cfg
 
 
 def save(cfg):
     cfg = dict(cfg)
     cfg["smtp_password"] = clean_password(cfg.get("smtp_password"))
-    on_disk = {k: v for k, v in cfg.items() if k not in _SECRET_KEYS}
+    on_disk = {
+        k: v for k, v in cfg.items() if k not in _SECRET_KEYS and k not in _RUNTIME_KEYS
+    }
 
     stored_in_wallet = False
     kr = _keyring()

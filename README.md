@@ -75,10 +75,22 @@ says exactly what is still missing. Three steps:
 
 **Step 1 — Where books go.** Your Kindle address (`something@kindle.com`) and
 the address you send from. If calibre is set up on the machine, both are
-pre-filled from its email settings. The From address must be on Amazon's
-**Approved Personal Document E-mail List** or Amazon silently drops the mail —
-the *Open Amazon approved-senders page* button takes you there (Preferences →
-Personal Document Settings).
+pre-filled from its email settings — but treat that as a guess and check it,
+because calibre's copy is often stale. The app flags an unchecked
+calibre-derived address until you either edit it or mark it verified.
+
+Two ways to get this wrong, and **both fail identically and silently** —
+Amazon accepts the mail, drops it, and sends no bounce and no confirmation:
+
+- the Kindle address doesn't match a registered device. *Find your Kindle
+  address* opens Amazon's device list, where each device's real address is
+  shown.
+- the From address isn't on the **Approved Personal Document E-mail List**.
+  *Approved-senders list* opens Preferences → Personal Document Settings.
+
+If a book never arrives, check your mail client's Sent folder first: if the
+message is there with the book attached, delivery got as far as Amazon and one
+of those two settings is the cause.
 
 **Step 2 — The sending account.** Defaults to `smtp.gmail.com` / `587`. Click
 **Get a Gmail App Password**: it opens the Google page where you sign in and

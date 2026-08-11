@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "kindle-sender"
-version = "1.0.0"
+version = "1.0.1"
 description = "Fix EPUBs for Kindle and send them to your device by email"
 readme = "README.md"
 authors = [{ name = "Motti Schleider", email = "motti.schleider@gmail.com" }]
