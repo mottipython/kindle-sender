@@ -1,0 +1,44 @@
+[build-system]
+requires = ["setuptools>=64"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "kindle-sender"
+version = "1.0.0"
+description = "Fix EPUBs for Kindle and send them to your device by email"
+readme = "README.md"
+authors = [{ name = "Motti Schleider", email = "motti.schleider@gmail.com" }]
+requires-python = ">=3.9"
+license = "MIT"
+license-files = ["LICENSE"]
+keywords = ["kindle", "epub", "ebook", "calibre", "send-to-kindle"]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Environment :: X11 Applications",
+    "Intended Audience :: End Users/Desktop",
+    "Operating System :: POSIX :: Linux",
+    "Programming Language :: Python :: 3",
+    "Topic :: Utilities",
+]
+# Everything the core does — the EPUB fixes and email delivery — is stdlib
+# only. The extras below each make one optional feature better.
+dependencies = []
+
+[project.optional-dependencies]
+# Drag-and-drop onto the book list.
+dnd = ["tkinterdnd2>=0.4"]
+# Store the app password in the system wallet instead of a config file.
+wallet = ["keyring>=23", "SecretStorage>=3; sys_platform == 'linux'"]
+# Detect flat placeholder covers so real cover art is never replaced.
+covers = ["Pillow>=9"]
+all = ["tkinterdnd2>=0.4", "keyring>=23", "SecretStorage>=3; sys_platform == 'linux'", "Pillow>=9"]
+
+[project.scripts]
+kindle-sender = "kindle_sender.gui:main"
+
+[project.urls]
+Homepage = "https://github.com/mottipython/kindle-sender"
+Issues = "https://github.com/mottipython/kindle-sender/issues"
+
+[tool.setuptools]
+packages = ["kindle_sender"]
