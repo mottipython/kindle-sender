@@ -84,6 +84,7 @@ class App:
             "watch_folder": tk.StringVar(value=c["watch_folder"]),
             "watch_enabled": tk.BooleanVar(value=c["watch_enabled"]),
             "default_lang": tk.StringVar(value=c["default_lang"]),
+            "kindle_addr_verified": tk.BooleanVar(value=c.get("kindle_addr_verified", False)),
         }
         self.status_text = tk.StringVar(value="Ready.")
 
@@ -196,18 +197,34 @@ class App:
         g1 = ttk.Frame(step1)
         g1.pack(fill="x", padx=8, pady=8)
         g1.columnconfigure(1, weight=1)
-        self._field(g1, 0, "Send to (your Kindle address)", "kindle_addr")
+        entry = self._field(g1, 0, "Send to (your Kindle address)", "kindle_addr")
+        entry.bind("<KeyRelease>", lambda _e: self._refresh_addr_hint())
         self._field(g1, 1, "From (your email address)", "from_addr")
+
+        hint_row = ttk.Frame(step1)
+        hint_row.pack(fill="x", padx=8)
+        self.addr_hint = ttk.Label(hint_row, text="", justify="left", wraplength=640)
+        self.addr_hint.pack(side="left")
+        self.addr_verified_btn = ttk.Button(
+            hint_row, text="I checked, it's right", command=self._mark_addr_verified
+        )
+
         ttk.Label(
             step1,
-            text="Amazon only accepts documents from addresses you have approved.\n"
-                 "Add the From address under Preferences → Personal Document Settings.",
+            text="Both of these fail silently if wrong: Amazon accepts the mail and drops\n"
+                 "it, with no bounce and no confirmation. Check them against the pages below.",
             foreground="#666", justify="left",
-        ).pack(anchor="w", padx=8)
+        ).pack(anchor="w", padx=8, pady=(4, 0))
+        row = ttk.Frame(step1)
+        row.pack(anchor="w", padx=8, pady=(6, 8))
         ttk.Button(
-            step1, text="Open Amazon approved-senders page",
+            row, text="Find your Kindle address",
+            command=lambda: self._open_url(config.AMAZON_DEVICES_URL),
+        ).pack(side="left")
+        ttk.Button(
+            row, text="Approved-senders list",
             command=lambda: self._open_url(config.AMAZON_SENDERS_URL),
-        ).pack(anchor="w", padx=8, pady=(6, 8))
+        ).pack(side="left", padx=6)
 
         # -- step 2 ---------------------------------------------------------
         step2 = ttk.LabelFrame(f, text="Step 2 — The account that sends the mail")
@@ -296,6 +313,32 @@ class App:
         webbrowser.open(url)
         self.log(f"Opened {url} in your browser.")
 
+    def _mark_addr_verified(self):
+        self.v["kindle_addr_verified"].set(True)
+        self._save()
+
+    def _refresh_addr_hint(self):
+        """Warn about a malformed address, or one we only guessed from calibre."""
+        addr = self.v["kindle_addr"].get()
+        warning = config.kindle_address_warning(addr)
+        show_button = False
+        if warning:
+            self.addr_hint.configure(text="✗ " + warning, foreground="#b42318")
+        elif config.is_calibre_guess(self.cfg, addr):
+            self.addr_hint.configure(
+                text="⚠ This was copied from calibre's settings and has not been checked."
+                     " Calibre's copy is often out of date, and a wrong address fails"
+                     " silently. Confirm it on Amazon's device page below.",
+                foreground="#9a6700",
+            )
+            show_button = True
+        else:
+            self.addr_hint.configure(text="")
+        if show_button:
+            self.addr_verified_btn.pack(side="left", padx=8)
+        else:
+            self.addr_verified_btn.pack_forget()
+
     def _refresh_banner(self):
         """Green when email is ready to go, amber when something is missing."""
         cfg = self._collect()
@@ -319,6 +362,7 @@ class App:
                 bg="#fff4e5", fg="#9a6700",
             )
         self.storage_label.configure(text=config.storage_note())
+        self._refresh_addr_hint()
 
     def _build_log_tab(self):
         f = self.log_tab
@@ -472,6 +516,12 @@ class App:
                 "Email isn't set up yet — the Settings tab walks through it.\n\n"
                 "Or untick \"Email to Kindle\" to just fix the books.",
             )
+            self.nb.select(self.settings_tab)
+            self._refresh_banner()
+            return
+        warning = cfg["do_send"] and config.kindle_address_warning(cfg["kindle_addr"])
+        if warning:
+            messagebox.showwarning(APP_TITLE, warning)
             self.nb.select(self.settings_tab)
             self._refresh_banner()
             return

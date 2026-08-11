@@ -1,7 +1,7 @@
 %global forgeurl https://github.com/mottipython/kindle-sender
 
 Name:           kindle-sender
-Version:        1.0.0
+Version:        1.0.1
 Release:        1%{?dist}
 Summary:        Fix EPUBs for Kindle and send them to your device by email
 
@@ -67,5 +67,8 @@ desktop-file-validate %{buildroot}%{_datadir}/applications/%{name}.desktop
 %{_datadir}/icons/hicolor/scalable/apps/%{name}.svg
 
 %changelog
+* Tue Aug 11 2026 Motti Schleider <motti.schleider@gmail.com> - 1.0.1-1
+- Flag an unverified Kindle address copied from calibre
+
 * Tue Aug 11 2026 Motti Schleider <motti.schleider@gmail.com> - 1.0.0-1
 - Initial package
