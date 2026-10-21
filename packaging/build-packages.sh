@@ -10,7 +10,8 @@ cargo build --release --manifest-path "${REPO_DIR}/Cargo.toml"
 
 BIN="${REPO_DIR}/target/release/kindle-sender"
 DESKTOP="${REPO_DIR}/packaging/kindle-sender.desktop"
-ICON="${REPO_DIR}/packaging/kindle-sender.svg"
+ICON_SVG="${REPO_DIR}/packaging/kindle-sender.svg"
+ICONS_DIR="${REPO_DIR}/packaging/icons"
 
 mkdir -p "${DIST_DIR}"
 
@@ -24,7 +25,8 @@ trap 'rm -rf "${RPM_TMP}"' EXIT
 mkdir -p "${RPM_TMP}"/{BUILD,RPMS,SOURCES,SPECS,SRPMS,tmp}
 cp "${BIN}" "${RPM_TMP}/SOURCES/kindle-sender"
 cp "${DESKTOP}" "${RPM_TMP}/SOURCES/kindle-sender.desktop"
-cp "${ICON}" "${RPM_TMP}/SOURCES/kindle-sender.svg"
+cp "${ICON_SVG}" "${RPM_TMP}/SOURCES/kindle-sender.svg"
+cp -r "${ICONS_DIR}" "${RPM_TMP}/SOURCES/icons"
 
 cat << SPEC > "${RPM_TMP}/SPECS/kindle-sender.spec"
 Name:           kindle-sender
@@ -50,10 +52,15 @@ install -Dpm 0755 %{_sourcedir}/kindle-sender %{buildroot}%{_bindir}/kindle-send
 install -Dpm 0644 %{_sourcedir}/kindle-sender.desktop %{buildroot}%{_datadir}/applications/kindle-sender.desktop
 install -Dpm 0644 %{_sourcedir}/kindle-sender.svg %{buildroot}%{_datadir}/icons/hicolor/scalable/apps/kindle-sender.svg
 
+for sz in 16 24 32 48 64 128 256; do
+    mkdir -p %{buildroot}%{_datadir}/icons/hicolor/\${sz}x\${sz}/apps
+    install -Dpm 0644 %{_sourcedir}/icons/\${sz}x\${sz}/apps/kindle-sender.png %{buildroot}%{_datadir}/icons/hicolor/\${sz}x\${sz}/apps/kindle-sender.png
+done
+
 %files
 %{_bindir}/kindle-sender
 %{_datadir}/applications/kindle-sender.desktop
-%{_datadir}/icons/hicolor/scalable/apps/kindle-sender.svg
+%{_datadir}/icons/hicolor/*/apps/kindle-sender.*
 
 %changelog
 * Wed Oct 21 2026 Motti Schleider <motti.schleider@gmail.com> - 1.0.1-1
@@ -82,7 +89,12 @@ mkdir -p "${DEB_TMP}/data/usr/share/icons/hicolor/scalable/apps"
 
 install -m 0755 "${BIN}" "${DEB_TMP}/data/usr/bin/kindle-sender"
 install -m 0644 "${DESKTOP}" "${DEB_TMP}/data/usr/share/applications/kindle-sender.desktop"
-install -m 0644 "${ICON}" "${DEB_TMP}/data/usr/share/icons/hicolor/scalable/apps/kindle-sender.svg"
+install -m 0644 "${ICON_SVG}" "${DEB_TMP}/data/usr/share/icons/hicolor/scalable/apps/kindle-sender.svg"
+
+for sz in 16 24 32 48 64 128 256; do
+    mkdir -p "${DEB_TMP}/data/usr/share/icons/hicolor/${sz}x${sz}/apps"
+    install -m 0644 "${ICONS_DIR}/${sz}x${sz}/apps/kindle-sender.png" "${DEB_TMP}/data/usr/share/icons/hicolor/${sz}x${sz}/apps/kindle-sender.png"
+done
 
 # Control tree
 mkdir -p "${DEB_TMP}/control"
