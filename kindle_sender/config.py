@@ -146,7 +146,7 @@ def _from_calibre():
         seed["from_addr"] = data["from_"]
         seed["smtp_user"] = data["from_"]
     for addr in (data.get("accounts") or {}):
-        if addr.endswith("kindle.com"):
+        if "@" in addr and addr.split("@")[-1].lower() in ("kindle.com", "free.kindle.com"):
             seed["kindle_addr"] = addr
             break
     return seed
