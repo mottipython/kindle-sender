@@ -34,6 +34,7 @@ enum GuiEvent {
 }
 
 pub fn run_gui() -> anyhow::Result<()> {
+    let _ = slint::set_xdg_app_id("kindle-sender");
     let app = AppWindow::new()?;
     let cfg = Rc::new(RefCell::new(config::load()));
 
