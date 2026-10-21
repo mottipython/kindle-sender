@@ -103,7 +103,9 @@ pub fn keyring_available() -> bool {
         Ok(e) => e,
         Err(_) => return false,
     };
-    if entry.set_password("1").is_ok() {
+    let res = entry.set_password("1");
+    // eprintln!("probe set_password: {:?}", res);
+    if res.is_ok() {
         let _ = entry.delete_credential();
         true
     } else {
@@ -214,15 +216,26 @@ pub fn load() -> Config {
                 if let Some(s) = saved.get("default_lang").and_then(|v| v.as_str()) { cfg.default_lang = s.to_string(); }
                 if let Some(s) = saved.get("max_attach_mb").and_then(|v| v.as_f64()) { cfg.max_attach_mb = s; }
                 if let Some(s) = saved.get("kindle_addr_verified").and_then(|v| v.as_bool()) { cfg.kindle_addr_verified = s; }
+                if let Some(s) = saved.get("password_in_wallet").and_then(|v| v.as_bool()) { cfg.password_in_wallet = s; }
             }
         }
     }
 
     if cfg.smtp_password.is_empty() {
         let account = keyring_account(&cfg);
-        if let Ok(entry) = keyring::Entry::new(KEYRING_SERVICE, &account) {
-            if let Ok(pwd) = entry.get_password() {
-                cfg.smtp_password = pwd;
+        match keyring::Entry::new(KEYRING_SERVICE, &account) {
+            Ok(entry) => {
+                match entry.get_password() {
+                    Ok(pwd) => {
+                        cfg.smtp_password = pwd;
+                    }
+                    Err(_err) => {
+                        // eprintln!("Keyring error for {}: {}", account, err);
+                    }
+                }
+            }
+            Err(_e) => {
+                // eprintln!("Keyring entry error: {}", e);
             }
         }
     }
