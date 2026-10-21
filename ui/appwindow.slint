@@ -1,0 +1,352 @@
+import { Button, CheckBox, LineEdit, ScrollView, TabWidget, HorizontalBox, VerticalBox, ProgressIndicator, GroupBox, ListView } from "std-widgets.slint";
+
+export struct BookItem {
+    id: int,
+    path: string,
+    filename: string,
+    status: string,
+    details: string,
+}
+
+export component AppWindow inherits Window {
+    title: "Kindle Sender";
+    preferred-width: 880px;
+    preferred-height: 620px;
+    min-width: 720px;
+    min-height: 500px;
+
+    in-out property <[BookItem]> books: [];
+    in-out property <bool> do_convert: true;
+    in-out property <bool> do_metadata: true;
+    in-out property <bool> do_cover: true;
+    in-out property <bool> do_fix: true;
+    in-out property <bool> do_send: true;
+    in-out property <bool> keep_copy: false;
+    in-out property <string> output_dir: "";
+
+    in-out property <string> kindle_addr: "";
+    in-out property <string> from_addr: "";
+    in-out property <string> smtp_host: "smtp.gmail.com";
+    in-out property <string> smtp_port: "587";
+    in-out property <string> smtp_user: "";
+    in-out property <string> smtp_password: "";
+    in-out property <string> storage_note: "";
+    in-out property <string> watch_folder: "";
+    in-out property <bool> watch_enabled: false;
+
+    in-out property <string> log_text: "";
+    in-out property <string> status_text: "Ready.";
+    in-out property <float> progress: 0.0;
+    in-out property <bool> is_processing: false;
+
+    in-out property <bool> has_test_result: false;
+    in-out property <bool> test_result_is_ok: false;
+    in-out property <string> test_result_text: "";
+
+    callback add_files();
+    callback add_folder();
+    callback clear_finished();
+    callback clear_all();
+    callback start_processing();
+    callback cancel_processing();
+    callback test_connection();
+    callback save_settings();
+    callback open_url(string);
+    callback browse_output_dir();
+    callback browse_watch_dir();
+
+    VerticalBox {
+        padding: 10px;
+        spacing: 8px;
+
+        TabWidget {
+            Tab {
+                title: "  Books  ";
+
+                VerticalBox {
+                    padding: 8px;
+                    spacing: 8px;
+
+                    // Header toolbar
+                    HorizontalBox {
+                        padding: 0px;
+                        spacing: 8px;
+                        Button {
+                            text: "Add files...";
+                            enabled: !root.is_processing;
+                            clicked => { root.add_files(); }
+                        }
+                        Button {
+                            text: "Add folder...";
+                            enabled: !root.is_processing;
+                            clicked => { root.add_folder(); }
+                        }
+                        Rectangle { horizontal-stretch: 1; }
+                        Button {
+                            text: "Clear finished";
+                            enabled: !root.is_processing;
+                            clicked => { root.clear_finished(); }
+                        }
+                        Button {
+                            text: "Clear all";
+                            enabled: !root.is_processing;
+                            clicked => { root.clear_all(); }
+                        }
+                    }
+
+                    // Book list table
+                    Rectangle {
+                        background: #ffffff;
+                        border-width: 1px;
+                        border-color: #d0d7de;
+                        border-radius: 4px;
+                        vertical-stretch: 1;
+
+                        ListView {
+                            for item in root.books: Rectangle {
+                                height: 38px;
+                                background: Math.mod(item.id, 2) == 0 ? #ffffff : #f6f8fa;
+                                
+                                border-color: #eaecef;
+
+                                HorizontalBox {
+                                    padding-left: 12px;
+                                    padding-right: 12px;
+                                    spacing: 12px;
+
+                                    Text {
+                                        text: item.filename;
+                                        font-weight: 500;
+                                        vertical-alignment: center;
+                                        width: 320px;
+                                        overflow: elide;
+                                    }
+
+                                    Rectangle {
+                                        width: 80px;
+                                        height: 22px;
+                                        border-radius: 4px;
+                                        background: item.status == "ok" ? #dafbe1 :
+                                                    item.status == "working" ? #ddf4ff :
+                                                    item.status == "error" ? #ffebe9 :
+                                                    item.status == "skipped" ? #fff8c5 : #f6f8fa;
+
+                                        Text {
+                                            text: item.status == "ok" ? "OK" :
+                                                  item.status == "working" ? "Working" :
+                                                  item.status == "error" ? "Error" :
+                                                  item.status == "skipped" ? "Skipped" : "Pending";
+                                            color: item.status == "ok" ? #1a7f37 :
+                                                   item.status == "working" ? #0969da :
+                                                   item.status == "error" ? #cf222e :
+                                                   item.status == "skipped" ? #9a6700 : #656d76;
+                                            font-size: 11px;
+                                            font-weight: 600;
+                                            horizontal-alignment: center;
+                                            vertical-alignment: center;
+                                        }
+                                    }
+
+                                    Text {
+                                        text: item.details;
+                                        color: #57606a;
+                                        vertical-alignment: center;
+                                        horizontal-stretch: 1;
+                                        overflow: elide;
+                                    }
+                                }
+                            }
+                        }
+                    }
+
+                    // Pipeline checkboxes
+                    HorizontalBox {
+                        padding: 0px;
+                        spacing: 16px;
+                        CheckBox { text: "Convert to EPUB"; checked <=> root.do_convert; enabled: !root.is_processing; }
+                        CheckBox { text: "Metadata"; checked <=> root.do_metadata; enabled: !root.is_processing; }
+                        CheckBox { text: "Cover"; checked <=> root.do_cover; enabled: !root.is_processing; }
+                        CheckBox { text: "Kindle fixes"; checked <=> root.do_fix; enabled: !root.is_processing; }
+                        CheckBox { text: "Send to Kindle"; checked <=> root.do_send; enabled: !root.is_processing; }
+                        CheckBox { text: "Keep copy"; checked <=> root.keep_copy; enabled: !root.is_processing; }
+                    }
+
+                    // Primary run / cancel actions
+                    HorizontalBox {
+                        padding: 0px;
+                        spacing: 8px;
+                        Rectangle { horizontal-stretch: 1; }
+
+                        if root.is_processing: Button {
+                            text: "Cancel";
+                            clicked => { root.cancel_processing(); }
+                        }
+
+                        if !root.is_processing: Button {
+                            text: "Send queued books";
+                            primary: true;
+                            enabled: root.books.length > 0;
+                            clicked => { root.start_processing(); }
+                        }
+                    }
+                }
+            }
+
+            Tab {
+                title: "  Settings  ";
+
+                ScrollView {
+                    VerticalBox {
+                        padding: 16px;
+                        spacing: 14px;
+
+                        GroupBox {
+                            title: "Delivery (Where books go)";
+
+                            VerticalBox {
+                                spacing: 8px;
+                                HorizontalBox {
+                                    Text { text: "Kindle address (@kindle.com):"; width: 220px; vertical-alignment: center; }
+                                    LineEdit { text <=> root.kindle_addr; placeholder-text: "something@kindle.com"; }
+                                }
+                                HorizontalBox {
+                                    Text { text: "Your Approved From email:"; width: 220px; vertical-alignment: center; }
+                                    LineEdit { text <=> root.from_addr; placeholder-text: "yourname@gmail.com"; }
+                                }
+                                HorizontalBox {
+                                    Text { text: "Amazon setup links:"; width: 220px; vertical-alignment: center; color: #666; font-size: 11px; }
+                                    Button {
+                                        text: "Find your Kindle address";
+                                        clicked => { root.open_url("https://www.amazon.com/hz/mycd/digital-console/alldevices"); }
+                                    }
+                                    Button {
+                                        text: "Approved Personal Document List";
+                                        clicked => { root.open_url("https://www.amazon.com/hz/mycd/myx#/home/settings/pdoc"); }
+                                    }
+                                }
+                            }
+                        }
+
+                        GroupBox {
+                            title: "Sending Account (SMTP)";
+
+                            VerticalBox {
+                                spacing: 8px;
+                                HorizontalBox {
+                                    Text { text: "SMTP Host / Port:"; width: 220px; vertical-alignment: center; }
+                                    LineEdit { text <=> root.smtp_host; width: 300px; }
+                                    LineEdit { text <=> root.smtp_port; width: 80px; }
+                                }
+                                HorizontalBox {
+                                    Text { text: "SMTP Username:"; width: 220px; vertical-alignment: center; }
+                                    LineEdit { text <=> root.smtp_user; placeholder-text: "usually your Gmail address"; }
+                                }
+                                HorizontalBox {
+                                    Text { text: "SMTP App Password:"; width: 220px; vertical-alignment: center; }
+                                    LineEdit { text <=> root.smtp_password; input-type: password; placeholder-text: "16-char App Password"; }
+                                    Button {
+                                        text: "Get a Gmail App Password";
+                                        clicked => { root.open_url("https://myaccount.google.com/apppasswords"); }
+                                    }
+                                }
+                                Text {
+                                    text: root.storage_note;
+                                    color: #57606a;
+                                    font-size: 11px;
+                                }
+                                HorizontalBox {
+                                    spacing: 12px;
+                                    Button {
+                                        text: "Test connection";
+                                        clicked => { root.test_connection(); }
+                                    }
+                                    if root.has_test_result: Text {
+                                        text: root.test_result_text;
+                                        color: root.test_result_is_ok ? #1a7f37 : #cf222e;
+                                        font-weight: 600;
+                                        vertical-alignment: center;
+                                    }
+                                }
+                            }
+                        }
+
+                        GroupBox {
+                            title: "Watch Folder (Automatic processing)";
+
+                            VerticalBox {
+                                spacing: 8px;
+                                CheckBox {
+                                    text: "Enable watch folder (automatically send books dropped in this folder)";
+                                    checked <=> root.watch_enabled;
+                                }
+                                HorizontalBox {
+                                    Text { text: "Watch folder:"; width: 140px; vertical-alignment: center; }
+                                    LineEdit { text <=> root.watch_folder; }
+                                    Button {
+                                        text: "Browse...";
+                                        clicked => { root.browse_watch_dir(); }
+                                    }
+                                }
+                            }
+                        }
+
+                        HorizontalBox {
+                            Rectangle { horizontal-stretch: 1; }
+                            Button {
+                                text: "Save settings";
+                                primary: true;
+                                clicked => { root.save_settings(); }
+                            }
+                        }
+                    }
+                }
+            }
+
+            Tab {
+                title: "  Log  ";
+
+                VerticalBox {
+                    padding: 8px;
+                    Rectangle {
+                        background: #1e1e1e;
+                        border-radius: 4px;
+                        border-width: 1px;
+                        border-color: #333333;
+                        vertical-stretch: 1;
+
+                        ScrollView {
+                            Text {
+                                text: root.log_text;
+                                color: #d4d4d4;
+                                font-family: "monospace";
+                                font-size: 12px;
+                                wrap: word-wrap;
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        // Bottom status & progress bar
+        HorizontalBox {
+            padding: 0px;
+            spacing: 12px;
+
+            ProgressIndicator {
+                progress: root.progress;
+                horizontal-stretch: 1;
+            }
+
+            Text {
+                text: root.status_text;
+                color: #57606a;
+                font-size: 12px;
+                vertical-alignment: center;
+                width: 250px;
+                horizontal-alignment: right;
+                overflow: elide;
+            }
+        }
+    }
+}

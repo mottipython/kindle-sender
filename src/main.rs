@@ -25,6 +25,9 @@ struct Cli {
 
 #[derive(Subcommand, Debug)]
 enum Commands {
+    /// Launch the graphical desktop interface
+    Gui,
+
     /// Process and send one or more books to your Kindle
     Send {
         /// Book files to process and send
@@ -114,6 +117,10 @@ fn main() -> anyhow::Result<()> {
     let cli = Cli::parse();
 
     match cli.command {
+        Some(Commands::Gui) => {
+            kindle_sender::gui::run_gui()?;
+        }
+
         Some(Commands::Send {
             files,
             no_convert,
@@ -147,8 +154,7 @@ fn main() -> anyhow::Result<()> {
             if !cli.files.is_empty() {
                 cmd_send(cli.files, false, false, false, false, None)?;
             } else {
-                println!("Kindle Sender v{}", env!("CARGO_PKG_VERSION"));
-                println!("Run 'kindle-sender --help' for usage, or 'kindle-sender doctor' to check status.");
+                kindle_sender::gui::run_gui()?;
             }
         }
     }
