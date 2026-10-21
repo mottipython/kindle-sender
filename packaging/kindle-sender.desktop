@@ -11,3 +11,4 @@ Categories=Office;Viewer;Literature;
 MimeType=application/epub+zip;application/x-mobipocket-ebook;application/vnd.amazon.ebook;
 Keywords=kindle;epub;ebook;calibre;
 StartupNotify=true
+StartupWMClass=kindle-sender
