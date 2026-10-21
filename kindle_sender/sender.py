@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import mimetypes
 import os
 import smtplib
 import ssl
@@ -86,11 +87,23 @@ def send_book(cfg, path, subject=None):
         "Note: the sending address must be on your Amazon "
         "'Approved Personal Document E-mail List'."
     )
+    ext = os.path.splitext(path)[1].lower()
+    if ext == ".epub":
+        maintype, subtype = "application", "epub+zip"
+    elif ext == ".pdf":
+        maintype, subtype = "application", "pdf"
+    else:
+        ctype, _ = mimetypes.guess_type(path)
+        if ctype and "/" in ctype:
+            maintype, subtype = ctype.split("/", 1)
+        else:
+            maintype, subtype = "application", "octet-stream"
+
     with open(path, "rb") as fh:
         msg.add_attachment(
             fh.read(),
-            maintype="application",
-            subtype="epub+zip",
+            maintype=maintype,
+            subtype=subtype,
             filename=os.path.basename(path),
         )
 
