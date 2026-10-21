@@ -34,8 +34,10 @@ enum GuiEvent {
 }
 
 pub fn run_gui() -> anyhow::Result<()> {
+    slint::BackendSelector::new().select()?;
     let _ = slint::set_xdg_app_id("kindle-sender");
     let app = AppWindow::new()?;
+    let _ = slint::set_xdg_app_id("kindle-sender");
     let cfg = Rc::new(RefCell::new(config::load()));
 
     // Populate initial settings
