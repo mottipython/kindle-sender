@@ -1,6 +1,6 @@
 [package]
 name = "kindle-sender"
-version = "1.0.1"
+version = "1.0.2"
 edition = "2021"
 authors = ["Motti"]
 description = "A Linux desktop app and CLI that repairs ebooks for Kindle and emails them via Send-to-Kindle"
