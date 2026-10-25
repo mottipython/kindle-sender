@@ -8,17 +8,21 @@ use kindle_sender::native::epub_meta;
 use kindle_sender::pipeline::{process_file, Status};
 
 fn fixture(ext: &str) -> PathBuf {
-    Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures").join(format!("Jules Verne - Test Book.{}", ext))
+    Path::new(env!("CARGO_MANIFEST_DIR"))
+        .join("tests/fixtures")
+        .join(format!("Jules Verne - Test Book.{}", ext))
 }
 
 fn run(ext: &str) {
     std::env::set_var("PATH", "");
     let out = tempfile::tempdir().unwrap();
-    let mut cfg = Config::default();
-    cfg.do_send = false;
-    cfg.do_cover = false;
-    cfg.keep_copy = true;
-    cfg.output_dir = out.path().to_string_lossy().to_string();
+    let cfg = Config {
+        do_send: false,
+        do_cover: false,
+        keep_copy: true,
+        output_dir: out.path().to_string_lossy().to_string(),
+        ..Default::default()
+    };
 
     let result = process_file(fixture(ext), &cfg, |_| {}, || false);
     assert_eq!(result.status, Status::Ok, "{}: {:?}", ext, result.error);
@@ -42,7 +46,11 @@ fn run(ext: &str) {
         .filter(|(n, _)| n.ends_with(".xhtml"))
         .map(|(_, d)| String::from_utf8_lossy(d).into_owned())
         .collect();
-    assert!(text.contains("captain") && text.contains("storm"), "{}: lost the book text", ext);
+    assert!(
+        text.contains("captain") && text.contains("storm"),
+        "{}: lost the book text",
+        ext
+    );
 }
 
 #[test]
@@ -97,9 +105,15 @@ fn drm_and_garbage_are_rejected_cleanly() {
     std::env::set_var("PATH", "");
     let dir = tempfile::tempdir().unwrap();
     let bad = dir.path().join("junk.mobi");
-    std::fs::write(&bad, b"this is not a mobi file at all, just some text that is long enough to parse as nothing").unwrap();
-    let mut cfg = Config::default();
-    cfg.do_send = false;
+    std::fs::write(
+        &bad,
+        b"this is not a mobi file at all, just some text that is long enough to parse as nothing",
+    )
+    .unwrap();
+    let cfg = Config {
+        do_send: false,
+        ..Default::default()
+    };
     let r = process_file(&bad, &cfg, |_| {}, || false);
     assert_eq!(r.status, Status::Error);
 }

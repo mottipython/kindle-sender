@@ -23,14 +23,36 @@ pub struct Edit {
     pub author_sort: Option<String>,
 }
 
-fn load(path: &Path) -> Result<(Vec<String>, std::collections::HashMap<String, Vec<u8>>, String, String), NativeError> {
-    let (names, files) = read_all(path).map_err(|e| NativeError::Corrupt(e.to_string()))?;
-    let opf_path = find_opf_path(&files).ok_or_else(|| NativeError::Corrupt("EPUB has no OPF file".into()))?;
-    let opf = files.get(&opf_path).map(|d| decode_text(d)).ok_or_else(|| NativeError::Corrupt("OPF missing from archive".into()))?;
-    Ok((names, files, opf_path, opf))
+/// An opened EPUB: its entries plus the OPF's path and text.
+struct Opened {
+    names: Vec<String>,
+    files: std::collections::HashMap<String, Vec<u8>>,
+    opf_path: String,
+    opf: String,
 }
 
-fn save(path: &Path, names: &[String], mut files: std::collections::HashMap<String, Vec<u8>>, opf_path: &str, opf: String) -> Result<(), NativeError> {
+fn load(path: &Path) -> Result<Opened, NativeError> {
+    let (names, files) = read_all(path).map_err(|e| NativeError::Corrupt(e.to_string()))?;
+    let opf_path = find_opf_path(&files).ok_or_else(|| NativeError::Corrupt("EPUB has no OPF file".into()))?;
+    let opf = files
+        .get(&opf_path)
+        .map(|d| decode_text(d))
+        .ok_or_else(|| NativeError::Corrupt("OPF missing from archive".into()))?;
+    Ok(Opened {
+        names,
+        files,
+        opf_path,
+        opf,
+    })
+}
+
+fn save(
+    path: &Path,
+    names: &[String],
+    mut files: std::collections::HashMap<String, Vec<u8>>,
+    opf_path: &str,
+    opf: String,
+) -> Result<(), NativeError> {
     files.insert(opf_path.to_string(), opf.into_bytes());
     let tmp = path.with_extension("epub.tmp");
     repack(names, &files, &tmp).map_err(|e| NativeError::Corrupt(e.to_string()))?;
@@ -46,11 +68,15 @@ fn text_between(re: &Regex, s: &str) -> Vec<String> {
 }
 
 fn decode_entities(s: &str) -> String {
-    s.replace("&lt;", "<").replace("&gt;", ">").replace("&quot;", "\"").replace("&apos;", "'").replace("&amp;", "&")
+    s.replace("&lt;", "<")
+        .replace("&gt;", ">")
+        .replace("&quot;", "\"")
+        .replace("&apos;", "'")
+        .replace("&amp;", "&")
 }
 
 pub fn read(path: &Path) -> Result<Meta, NativeError> {
-    let (_, _, _, opf) = load(path)?;
+    let Opened { opf, .. } = load(path)?;
     let title_re = Regex::new(r"(?is)<dc:title\b[^>]*>(.*?)</dc:title>").unwrap();
     let creator_re = Regex::new(r"(?is)<dc:creator\b[^>]*>(.*?)</dc:creator>").unwrap();
     Ok(Meta {
@@ -75,7 +101,13 @@ fn remove_all(opf: &mut String, pattern: &str) {
 }
 
 fn set_meta(opf: &mut String, name: &str, value: Option<&str>) {
-    remove_all(opf, &format!(r#"(?is)\s*<meta\s+name\s*=\s*["']{}["'][^>]*/?>(</meta>)?"#, regex::escape(name)));
+    remove_all(
+        opf,
+        &format!(
+            r#"(?is)\s*<meta\s+name\s*=\s*["']{}["'][^>]*/?>(</meta>)?"#,
+            regex::escape(name)
+        ),
+    );
     if let Some(v) = value {
         insert_before_metadata_end(opf, &format!("<meta name=\"{}\" content=\"{}\"/>\n", name, esc(v)));
     }
@@ -109,29 +141,56 @@ fn apply(opf: &mut String, edit: &Edit) {
             _ => String::new(),
         };
         let role = if has_opf_ns(opf) { " opf:role=\"aut\"" } else { "" };
-        insert_before_metadata_end(opf, &format!("<dc:creator{}{}>{}</dc:creator>\n", role, file_as, esc(a)));
+        insert_before_metadata_end(
+            opf,
+            &format!("<dc:creator{}{}>{}</dc:creator>\n", role, file_as, esc(a)),
+        );
     }
 }
 
 pub fn edit(path: &Path, e: &Edit) -> Result<(), NativeError> {
-    let (names, files, opf_path, mut opf) = load(path)?;
+    let Opened {
+        names,
+        files,
+        opf_path,
+        mut opf,
+    } = load(path)?;
     apply(&mut opf, e);
     save(path, &names, files, &opf_path, opf)
 }
 
 /// Replaces the epub's cover with `image` (JPEG/PNG/GIF bytes).
 pub fn set_cover(path: &Path, image: &[u8]) -> Result<(), NativeError> {
-    let (ext, media) = sniff_image(image).ok_or_else(|| NativeError::Corrupt("cover is not a JPEG, PNG or GIF".into()))?;
-    let (mut names, mut files, opf_path, mut opf) = load(path)?;
+    let (ext, media) =
+        sniff_image(image).ok_or_else(|| NativeError::Corrupt("cover is not a JPEG, PNG or GIF".into()))?;
+    let Opened {
+        mut names,
+        mut files,
+        opf_path,
+        mut opf,
+    } = load(path)?;
     let dir = opf_path.rsplit_once('/').map(|x| x.0).unwrap_or("");
     let href = format!("ks-cover.{}", ext);
-    let full = if dir.is_empty() { href.clone() } else { format!("{}/{}", dir, href) };
+    let full = if dir.is_empty() {
+        href.clone()
+    } else {
+        format!("{}/{}", dir, href)
+    };
 
     set_meta(&mut opf, "cover", None);
-    remove_all(&mut opf, r#"(?is)\s*<item\b[^>]*\bid\s*=\s*["']ks-cover-image["'][^>]*/>"#);
+    remove_all(
+        &mut opf,
+        r#"(?is)\s*<item\b[^>]*\bid\s*=\s*["']ks-cover-image["'][^>]*/>"#,
+    );
     set_meta(&mut opf, "cover", Some("ks-cover-image"));
     if let Some(i) = opf.find("</manifest>") {
-        opf.insert_str(i, &format!("<item id=\"ks-cover-image\" href=\"{}\" media-type=\"{}\"/>\n", href, media));
+        opf.insert_str(
+            i,
+            &format!(
+                "<item id=\"ks-cover-image\" href=\"{}\" media-type=\"{}\"/>\n",
+                href, media
+            ),
+        );
     } else {
         return Err(NativeError::Corrupt("OPF has no manifest".into()));
     }
@@ -150,12 +209,27 @@ pub fn merge_opf(path: &Path, sidecar: &Path) -> Result<(), NativeError> {
         text_between(&re, &side)
     };
     let meta_re = |name: &str| {
-        Regex::new(&format!(r#"(?is)<meta\s+name\s*=\s*["']{}["']\s+content\s*=\s*["']([^"']*)["']"#, regex::escape(name))).unwrap()
+        Regex::new(&format!(
+            r#"(?is)<meta\s+name\s*=\s*["']{}["']\s+content\s*=\s*["']([^"']*)["']"#,
+            regex::escape(name)
+        ))
+        .unwrap()
     };
 
-    let (names, files, opf_path, mut opf) = load(path)?;
+    let Opened {
+        names,
+        files,
+        opf_path,
+        mut opf,
+    } = load(path)?;
     if let Some(t) = one("title").into_iter().next() {
-        apply(&mut opf, &Edit { title: Some(t), ..Default::default() });
+        apply(
+            &mut opf,
+            &Edit {
+                title: Some(t),
+                ..Default::default()
+            },
+        );
     }
     let authors = one("creator");
     if !authors.is_empty() {

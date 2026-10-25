@@ -203,11 +203,13 @@ pub fn run_gui() -> anyhow::Result<()> {
                 None => return,
             };
 
-            let mut test_cfg = Config::default();
-            test_cfg.smtp_host = ui.get_smtp_host().to_string();
-            test_cfg.smtp_port = ui.get_smtp_port().to_string().parse().unwrap_or(587);
-            test_cfg.smtp_user = ui.get_smtp_user().to_string();
-            test_cfg.smtp_password = ui.get_smtp_password().to_string();
+            let test_cfg = Config {
+                smtp_host: ui.get_smtp_host().to_string(),
+                smtp_port: ui.get_smtp_port().to_string().parse().unwrap_or(587),
+                smtp_user: ui.get_smtp_user().to_string(),
+                smtp_password: ui.get_smtp_password().to_string(),
+                ..Default::default()
+            };
 
             ui.set_has_test_result(true);
             ui.set_test_result_text("Testing connection...".into());
@@ -420,11 +422,7 @@ fn ping_ui(app_weak: &slint::Weak<AppWindow>, rx_arc: &Arc<Mutex<Receiver<GuiEve
                             books.set_row_data(index, item);
                         }
                     }
-                    GuiEvent::ItemDone {
-                        index,
-                        status,
-                        details,
-                    } => {
+                    GuiEvent::ItemDone { index, status, details } => {
                         let books = ui.get_books();
                         if let Some(mut item) = books.row_data(index) {
                             item.status = status.into();
@@ -448,11 +446,7 @@ fn ping_ui(app_weak: &slint::Weak<AppWindow>, rx_arc: &Arc<Mutex<Receiver<GuiEve
     });
 }
 
-fn start_watcher(
-    cfg: &Config,
-    app_weak: slint::Weak<AppWindow>,
-    handle_mutex: Arc<Mutex<Option<FolderWatcher>>>,
-) {
+fn start_watcher(cfg: &Config, app_weak: slint::Weak<AppWindow>, handle_mutex: Arc<Mutex<Option<FolderWatcher>>>) {
     if let Ok(mut lock) = handle_mutex.lock() {
         if let Some(mut old) = lock.take() {
             old.stop();

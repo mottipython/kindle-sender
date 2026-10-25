@@ -1,10 +1,10 @@
+use kindle_sender::epub_fix::fix_epub;
 use std::fs::File;
 use std::io::{Read, Write};
 use std::path::Path;
 use tempfile::tempdir;
 use zip::write::SimpleFileOptions;
 use zip::CompressionMethod;
-use kindle_sender::epub_fix::fix_epub;
 
 const CONTAINER: &str = r#"<?xml version="1.0"?>
 <container version="1.0" xmlns="urn:oasis:names:tc:opendocument:xmlns:container">
@@ -109,14 +109,21 @@ fn test_epub_fixes_invalid_and_missing_language() {
         assert!(chapter.contains("Café naïve"), "accents survived the round trip");
         assert!(toc.contains(r#"href="chapter1.xhtml""#), "body-id fragment stripped");
         assert!(toc.contains(r#"href="chapter1.xhtml#real-anchor""#), "real anchor kept");
-        assert!(toc.contains(r#"href="https://example.com/x#frag""#), "external link kept");
+        assert!(
+            toc.contains(r#"href="https://example.com/x#frag""#),
+            "external link kept"
+        );
         assert!(!chapter.contains("missing.jpg"), "stray img removed");
         assert!(chapter.contains("there.png"), "valid img kept");
         assert!(!chapter.contains(r#"alt="no src""#), "src-less img removed");
 
         let file = File::open(&book).unwrap();
         let mut archive = zip::ZipArchive::new(file).unwrap();
-        assert_eq!(archive.by_index(0).unwrap().name().unwrap(), "mimetype", "mimetype first in archive");
+        assert_eq!(
+            archive.by_index(0).unwrap().name().unwrap(),
+            "mimetype",
+            "mimetype first in archive"
+        );
         assert_eq!(
             archive.by_index(0).unwrap().compression(),
             CompressionMethod::Stored,

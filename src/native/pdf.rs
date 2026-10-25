@@ -12,7 +12,11 @@ use super::NativeError;
 
 fn is_page_number(line: &str) -> bool {
     let t = line.trim();
-    !t.is_empty() && t.len() <= 6 && t.chars().all(|c| c.is_ascii_digit() || c == '-' || c.is_ascii_alphabetic() && "ivxlcdm".contains(c.to_ascii_lowercase()))
+    !t.is_empty()
+        && t.len() <= 6
+        && t.chars().all(|c| {
+            c.is_ascii_digit() || c == '-' || c.is_ascii_alphabetic() && "ivxlcdm".contains(c.to_ascii_lowercase())
+        })
 }
 
 /// Extracts text page by page. pdf-extract panics on some fonts (e.g. Type 3 without
@@ -64,15 +68,24 @@ pub fn convert(path: &Path) -> Result<Book, NativeError> {
 
     let pages = extract_pages(&data)?;
 
-    let chars: usize = pages.iter().map(|p| p.chars().filter(|c| !c.is_whitespace()).count()).sum();
-    if pages.is_empty() || chars < 40 * pages.len().min(5).max(1) {
-        return Err(NativeError::Unsupported("the PDF has no text layer (scanned pages need OCR)".into()));
+    let chars: usize = pages
+        .iter()
+        .map(|p| p.chars().filter(|c| !c.is_whitespace()).count())
+        .sum();
+    if pages.is_empty() || chars < 40 * pages.len().clamp(1, 5) {
+        return Err(NativeError::Unsupported(
+            "the PDF has no text layer (scanned pages need OCR)".into(),
+        ));
     }
 
     // Running headers/footers: short lines repeated on many pages.
     let mut seen: HashMap<String, usize> = HashMap::new();
     for p in &pages {
-        let mut uniq: Vec<String> = p.lines().map(|l| l.trim().to_string()).filter(|l| !l.is_empty() && l.chars().count() <= 80).collect();
+        let mut uniq: Vec<String> = p
+            .lines()
+            .map(|l| l.trim().to_string())
+            .filter(|l| !l.is_empty() && l.chars().count() <= 80)
+            .collect();
         uniq.sort();
         uniq.dedup();
         for l in uniq {
@@ -130,6 +143,10 @@ pub fn convert(path: &Path) -> Result<Book, NativeError> {
     if paras.is_empty() {
         return Err(NativeError::Unsupported("the PDF has no readable text".into()));
     }
-    let title = path.file_stem().and_then(|s| s.to_str()).unwrap_or("book").replace('_', " ");
+    let title = path
+        .file_stem()
+        .and_then(|s| s.to_str())
+        .unwrap_or("book")
+        .replace('_', " ");
     Ok(book_from_paragraphs(title, paras))
 }

@@ -7,8 +7,7 @@ use std::thread;
 use std::time::Duration;
 
 pub const WATCHED_EXT: &[&str] = &[
-    ".epub", ".mobi", ".azw", ".azw3", ".prc", ".lit", ".pdf",
-    ".fb2", ".rtf", ".txt", ".docx", ".cbz",
+    ".epub", ".mobi", ".azw", ".azw3", ".prc", ".lit", ".pdf", ".fb2", ".rtf", ".txt", ".docx", ".cbz",
 ];
 
 pub const SUBDIRS: &[&str] = &["sent", "failed"];
@@ -140,11 +139,7 @@ impl Drop for FolderWatcher {
     }
 }
 
-pub fn archive<P: AsRef<Path>, Q: AsRef<Path>>(
-    path: P,
-    watch_folder: Q,
-    ok: bool,
-) -> Result<PathBuf, std::io::Error> {
+pub fn archive<P: AsRef<Path>, Q: AsRef<Path>>(path: P, watch_folder: Q, ok: bool) -> Result<PathBuf, std::io::Error> {
     let sub = if ok { "sent" } else { "failed" };
     let dest_dir = watch_folder.as_ref().join(sub);
     fs::create_dir_all(&dest_dir)?;
@@ -164,7 +159,7 @@ pub fn archive<P: AsRef<Path>, Q: AsRef<Path>>(
         n += 1;
     }
 
-    if let Err(_) = fs::rename(src, &dest) {
+    if fs::rename(src, &dest).is_err() {
         fs::copy(src, &dest)?;
         fs::remove_file(src)?;
     }

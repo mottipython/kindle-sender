@@ -1,9 +1,9 @@
+use serde::{Deserialize, Serialize};
 use std::fs::{self, File, OpenOptions};
 use std::io::{Read, Write};
 #[cfg(unix)]
 use std::os::unix::fs::{OpenOptionsExt, PermissionsExt};
 use std::path::PathBuf;
-use serde::{Deserialize, Serialize};
 
 pub const KEYRING_SERVICE: &str = "kindle-sender";
 pub const APP_PASSWORD_URL: &str = "https://myaccount.google.com/apppasswords";
@@ -198,25 +198,63 @@ pub fn load() -> Config {
         let mut buf = String::new();
         if file.read_to_string(&mut buf).is_ok() {
             if let Ok(saved) = serde_json::from_str::<serde_json::Value>(&buf) {
-                if let Some(s) = saved.get("smtp_host").and_then(|v| v.as_str()) { cfg.smtp_host = s.to_string(); }
-                if let Some(s) = saved.get("smtp_port").and_then(|v| v.as_u64()) { cfg.smtp_port = s as u16; }
-                if let Some(s) = saved.get("smtp_user").and_then(|v| v.as_str()) { cfg.smtp_user = s.to_string(); }
-                if let Some(s) = saved.get("smtp_password").and_then(|v| v.as_str()) { cfg.smtp_password = s.to_string(); }
-                if let Some(s) = saved.get("from_addr").and_then(|v| v.as_str()) { cfg.from_addr = s.to_string(); }
-                if let Some(s) = saved.get("kindle_addr").and_then(|v| v.as_str()) { cfg.kindle_addr = s.to_string(); }
-                if let Some(s) = saved.get("watch_folder").and_then(|v| v.as_str()) { cfg.watch_folder = s.to_string(); }
-                if let Some(s) = saved.get("watch_enabled").and_then(|v| v.as_bool()) { cfg.watch_enabled = s; }
-                if let Some(s) = saved.get("output_dir").and_then(|v| v.as_str()) { cfg.output_dir = s.to_string(); }
-                if let Some(s) = saved.get("keep_copy").and_then(|v| v.as_bool()) { cfg.keep_copy = s; }
-                if let Some(s) = saved.get("do_convert").and_then(|v| v.as_bool()) { cfg.do_convert = s; }
-                if let Some(s) = saved.get("do_metadata").and_then(|v| v.as_bool()) { cfg.do_metadata = s; }
-                if let Some(s) = saved.get("do_cover").and_then(|v| v.as_bool()) { cfg.do_cover = s; }
-                if let Some(s) = saved.get("do_fix").and_then(|v| v.as_bool()) { cfg.do_fix = s; }
-                if let Some(s) = saved.get("do_send").and_then(|v| v.as_bool()) { cfg.do_send = s; }
-                if let Some(s) = saved.get("default_lang").and_then(|v| v.as_str()) { cfg.default_lang = s.to_string(); }
-                if let Some(s) = saved.get("max_attach_mb").and_then(|v| v.as_f64()) { cfg.max_attach_mb = s; }
-                if let Some(s) = saved.get("kindle_addr_verified").and_then(|v| v.as_bool()) { cfg.kindle_addr_verified = s; }
-                if let Some(s) = saved.get("password_in_wallet").and_then(|v| v.as_bool()) { cfg.password_in_wallet = s; }
+                if let Some(s) = saved.get("smtp_host").and_then(|v| v.as_str()) {
+                    cfg.smtp_host = s.to_string();
+                }
+                if let Some(s) = saved.get("smtp_port").and_then(|v| v.as_u64()) {
+                    cfg.smtp_port = s as u16;
+                }
+                if let Some(s) = saved.get("smtp_user").and_then(|v| v.as_str()) {
+                    cfg.smtp_user = s.to_string();
+                }
+                if let Some(s) = saved.get("smtp_password").and_then(|v| v.as_str()) {
+                    cfg.smtp_password = s.to_string();
+                }
+                if let Some(s) = saved.get("from_addr").and_then(|v| v.as_str()) {
+                    cfg.from_addr = s.to_string();
+                }
+                if let Some(s) = saved.get("kindle_addr").and_then(|v| v.as_str()) {
+                    cfg.kindle_addr = s.to_string();
+                }
+                if let Some(s) = saved.get("watch_folder").and_then(|v| v.as_str()) {
+                    cfg.watch_folder = s.to_string();
+                }
+                if let Some(s) = saved.get("watch_enabled").and_then(|v| v.as_bool()) {
+                    cfg.watch_enabled = s;
+                }
+                if let Some(s) = saved.get("output_dir").and_then(|v| v.as_str()) {
+                    cfg.output_dir = s.to_string();
+                }
+                if let Some(s) = saved.get("keep_copy").and_then(|v| v.as_bool()) {
+                    cfg.keep_copy = s;
+                }
+                if let Some(s) = saved.get("do_convert").and_then(|v| v.as_bool()) {
+                    cfg.do_convert = s;
+                }
+                if let Some(s) = saved.get("do_metadata").and_then(|v| v.as_bool()) {
+                    cfg.do_metadata = s;
+                }
+                if let Some(s) = saved.get("do_cover").and_then(|v| v.as_bool()) {
+                    cfg.do_cover = s;
+                }
+                if let Some(s) = saved.get("do_fix").and_then(|v| v.as_bool()) {
+                    cfg.do_fix = s;
+                }
+                if let Some(s) = saved.get("do_send").and_then(|v| v.as_bool()) {
+                    cfg.do_send = s;
+                }
+                if let Some(s) = saved.get("default_lang").and_then(|v| v.as_str()) {
+                    cfg.default_lang = s.to_string();
+                }
+                if let Some(s) = saved.get("max_attach_mb").and_then(|v| v.as_f64()) {
+                    cfg.max_attach_mb = s;
+                }
+                if let Some(s) = saved.get("kindle_addr_verified").and_then(|v| v.as_bool()) {
+                    cfg.kindle_addr_verified = s;
+                }
+                if let Some(s) = saved.get("password_in_wallet").and_then(|v| v.as_bool()) {
+                    cfg.password_in_wallet = s;
+                }
             }
         }
     }
@@ -273,7 +311,10 @@ pub fn save(cfg: &mut Config) -> Result<bool, anyhow::Error> {
             map.remove("smtp_password");
         }
         map.remove("calibre_kindle_addr");
-        map.insert("password_in_wallet".to_string(), serde_json::Value::Bool(stored_in_wallet));
+        map.insert(
+            "password_in_wallet".to_string(),
+            serde_json::Value::Bool(stored_in_wallet),
+        );
     }
 
     let tmp_path = dir.join("config.json.tmp");
@@ -338,9 +379,11 @@ mod tests {
 
     #[test]
     fn test_is_calibre_guess() {
-        let mut cfg = Config::default();
-        cfg.calibre_kindle_addr = "guess@kindle.com".to_string();
-        cfg.kindle_addr_verified = false;
+        let mut cfg = Config {
+            calibre_kindle_addr: "guess@kindle.com".to_string(),
+            kindle_addr_verified: false,
+            ..Default::default()
+        };
 
         assert!(is_calibre_guess(&cfg, "guess@kindle.com"));
         assert!(!is_calibre_guess(&cfg, "other@kindle.com"));
