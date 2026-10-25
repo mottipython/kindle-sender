@@ -3,7 +3,7 @@ set -euo pipefail
 
 REPO_DIR="$(cd "$(dirname "$0")/.." && pwd)"
 DIST_DIR="${REPO_DIR}/dist"
-VERSION="1.0.1"
+VERSION="1.0.2"
 
 echo "=== Building Kindle Sender Release Binary ==="
 cargo build --release --manifest-path "${REPO_DIR}/Cargo.toml"
@@ -63,6 +63,10 @@ done
 %{_datadir}/icons/hicolor/*/apps/kindle-sender.*
 
 %changelog
+* Sun Oct 25 2026 Motti Schleider <motti.schleider@gmail.com> - 1.0.2-1
+- Fix book names invisible in dark themes
+- Always send from the GUI and watch folder (stale do_send=false made sends dry runs)
+
 * Wed Oct 21 2026 Motti Schleider <motti.schleider@gmail.com> - 1.0.1-1
 - Port to Rust with Slint native GUI
 SPEC
