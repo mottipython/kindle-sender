@@ -55,7 +55,9 @@ pub fn run_gui() -> anyhow::Result<()> {
         app.set_do_metadata(c.do_metadata);
         app.set_do_cover(c.do_cover);
         app.set_do_fix(c.do_fix);
-        app.set_do_send(c.do_send);
+        // The GUI's whole purpose is delivery; a stale `do_send: false` in the
+        // config must not silently turn "Send queued books" into a dry run.
+        app.set_do_send(true);
         app.set_keep_copy(c.keep_copy);
         app.set_output_dir(c.output_dir.clone().into());
 
@@ -458,7 +460,8 @@ fn start_watcher(
 
         let folder = PathBuf::from(&cfg.watch_folder);
         let mut watcher = FolderWatcher::new(&folder, 5.0);
-        let cfg_clone = cfg.clone();
+        let mut cfg_clone = cfg.clone();
+        cfg_clone.do_send = true;
         let watch_folder_str = cfg.watch_folder.clone();
 
         watcher.start(
