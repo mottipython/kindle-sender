@@ -8,14 +8,10 @@ use regex::Regex;
 
 use super::epub_writer::{esc, sniff_image, Book, Chapter, Resource, TocEntry};
 use super::xhtml::{self, Hook, Hooks};
-use super::{decode_bytes, fix_links, NativeError};
+use super::{book_id, decode_bytes, fix_links, NativeError};
 
 fn stem(path: &Path) -> String {
     path.file_stem().and_then(|s| s.to_str()).unwrap_or("book").replace('_', " ")
-}
-
-fn new_id() -> String {
-    format!("urn:uuid:kindle-sender-{}", std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map(|d| d.as_nanos()).unwrap_or(0))
 }
 
 fn chapter_file(i: usize) -> String {
@@ -25,7 +21,7 @@ fn chapter_file(i: usize) -> String {
 fn finish(mut book: Book, titles: Vec<Option<String>>) -> Book {
     for (i, ch) in book.chapters.iter().enumerate() {
         let title = titles.get(i).cloned().flatten().unwrap_or_else(|| ch.title.clone());
-        book.toc.push(TocEntry { title, href: ch.file.clone(), level: 0 });
+        book.toc.push(TocEntry { title, href: ch.file.clone() });
     }
     book
 }
@@ -76,7 +72,7 @@ pub fn book_from_paragraphs(title: String, paras: Vec<String>) -> Book {
     let mut book = Book {
         title,
         language: "en".into(),
-        identifier: new_id(),
+        identifier: book_id(paras.join("\n").as_bytes()),
         ..Default::default()
     };
     let mut titles = Vec::new();
@@ -187,7 +183,7 @@ pub fn convert_html(path: &Path) -> Result<Book, NativeError> {
     let files: Vec<String> = (0..parsed.parts.len()).map(chapter_file).collect();
     fix_links(&mut parsed.parts, &files, &parsed.anchors);
 
-    let mut book = Book { title, language: "en".into(), identifier: new_id(), resources: hooks.resources, ..Default::default() };
+    let mut book = Book { title, language: "en".into(), identifier: book_id(&raw), resources: hooks.resources, ..Default::default() };
     for (i, body) in parsed.parts.into_iter().enumerate() {
         book.chapters.push(Chapter { title: format!("Part {}", i + 1), file: files[i].clone(), body, raw: false });
     }
@@ -196,20 +192,19 @@ pub fn convert_html(path: &Path) -> Result<Book, NativeError> {
 
 // ----------------------------------------------------------------------- FB2
 
-struct Fb2<'a, 'i> {
-    binaries: HashMap<String, (String, Vec<u8>)>,
+struct Fb2 {
+    binaries: HashMap<String, Vec<u8>>,
     resources: Vec<Resource>,
     used: HashMap<String, String>,
-    _doc: std::marker::PhantomData<&'a roxmltree::Document<'i>>,
 }
 
-impl Fb2<'_, '_> {
+impl Fb2 {
     fn image(&mut self, href: &str) -> Option<String> {
         let id = href.trim_start_matches('#');
         if let Some(p) = self.used.get(id) {
             return Some(p.clone());
         }
-        let (_, data) = self.binaries.get(id)?;
+        let data = self.binaries.get(id)?;
         let (ext, media) = sniff_image(data)?;
         let path = format!("images/img{}.{}", self.resources.len() + 1, ext);
         self.resources.push(Resource { path: path.clone(), media_type: media.into(), data: data.clone() });
@@ -312,6 +307,14 @@ impl Fb2<'_, '_> {
             }
         }
     }
+
+    /// Renders one `<section>` as a chapter: its own title at h1, nested sections one level down.
+    fn block_single(&mut self, sec: roxmltree::Node, out: &mut String) {
+        let id = sec.attribute("id").map(|i| format!(" id=\"{}\"", esc(i))).unwrap_or_default();
+        out.push_str(&format!("<div{}>\n", id));
+        self.block(sec, out, 0);
+        out.push_str("</div>\n");
+    }
 }
 
 pub fn convert_fb2(path: &Path) -> Result<Book, NativeError> {
@@ -330,11 +333,11 @@ pub fn convert_fb2(path: &Path) -> Result<Book, NativeError> {
         let id = b.attribute("id").unwrap_or("").to_string();
         let compact: String = b.text().unwrap_or("").chars().filter(|c| !c.is_whitespace()).collect();
         if let Ok(data) = base64::engine::general_purpose::STANDARD.decode(compact.as_bytes()) {
-            binaries.insert(id, (b.attribute("content-type").unwrap_or("").to_string(), data));
+            binaries.insert(id, data);
         }
     }
 
-    let mut book = Book { language: "en".into(), identifier: new_id(), ..Default::default() };
+    let mut book = Book { language: "en".into(), identifier: book_id(&raw), ..Default::default() };
     if let Some(ti) = root.descendants().find(|n| n.has_tag_name("title-info")) {
         let text = |name: &str| ti.children().find(|c| c.has_tag_name(name)).map(|c| c.text().unwrap_or("").trim().to_string());
         book.title = text("book-title").filter(|t| !t.is_empty()).unwrap_or_else(|| stem(path));
@@ -358,7 +361,7 @@ pub fn convert_fb2(path: &Path) -> Result<Book, NativeError> {
         book.title = stem(path);
     }
 
-    let mut fb = Fb2 { binaries, resources: Vec::new(), used: HashMap::new(), _doc: std::marker::PhantomData };
+    let mut fb = Fb2 { binaries, resources: Vec::new(), used: HashMap::new() };
 
     // Cover first so it is resource #1.
     if let Some(cp) = root.descendants().find(|n| n.has_tag_name("coverpage")) {
@@ -411,14 +414,4 @@ pub fn convert_fb2(path: &Path) -> Result<Book, NativeError> {
     }
     book.resources = fb.resources;
     Ok(finish(book, titles))
-}
-
-impl Fb2<'_, '_> {
-    /// Renders one `<section>` as a chapter: its own title at h1, nested sections one level down.
-    fn block_single(&mut self, sec: roxmltree::Node, out: &mut String) {
-        let id = sec.attribute("id").map(|i| format!(" id=\"{}\"", esc(i))).unwrap_or_default();
-        out.push_str(&format!("<div{}>\n", id));
-        self.block(sec, out, 0);
-        out.push_str("</div>\n");
-    }
 }

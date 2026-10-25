@@ -28,7 +28,6 @@ pub struct Chapter {
 pub struct TocEntry {
     pub title: String,
     pub href: String,
-    pub level: usize,
 }
 
 #[derive(Default)]
@@ -63,20 +62,6 @@ pub fn esc(s: &str) -> String {
 
 pub fn is_xml_char(c: char) -> bool {
     matches!(c, '\t' | '\n' | '\r' | '\u{20}'..='\u{D7FF}' | '\u{E000}'..='\u{FFFD}' | '\u{10000}'..='\u{10FFFF}')
-}
-
-pub fn media_type_for(path: &str) -> &'static str {
-    match path.rsplit('.').next().map(|e| e.to_ascii_lowercase()).as_deref() {
-        Some("jpg") | Some("jpeg") => "image/jpeg",
-        Some("png") => "image/png",
-        Some("gif") => "image/gif",
-        Some("svg") => "image/svg+xml",
-        Some("css") => "text/css",
-        Some("ttf") => "application/x-font-truetype",
-        Some("otf") => "application/vnd.ms-opentype",
-        Some("xhtml") | Some("html") => "application/xhtml+xml",
-        _ => "application/octet-stream",
-    }
 }
 
 /// Sniffs an image from its magic bytes: (extension, media type).
@@ -144,9 +129,8 @@ pub fn write(book: &Book, dest: &Path) -> Result<(), NativeError> {
         zip.write_all(&res.data)?;
     }
 
-    let toc: Vec<&TocEntry> = book.toc.iter().collect();
     zip.start_file("OEBPS/toc.ncx", deflated).map_err(zerr)?;
-    zip.write_all(ncx(book, &toc).as_bytes())?;
+    zip.write_all(ncx(book).as_bytes())?;
 
     zip.start_file("OEBPS/content.opf", deflated).map_err(zerr)?;
     zip.write_all(opf(book).as_bytes())?;
@@ -155,7 +139,7 @@ pub fn write(book: &Book, dest: &Path) -> Result<(), NativeError> {
     Ok(())
 }
 
-fn ncx(book: &Book, toc: &[&TocEntry]) -> String {
+fn ncx(book: &Book) -> String {
     let mut s = format!(
         "<?xml version=\"1.0\" encoding=\"utf-8\"?>\n<ncx xmlns=\"http://www.daisy.org/z3986/2005/ncx/\" version=\"2005-1\">\n\
 <head><meta name=\"dtb:uid\" content=\"{}\"/><meta name=\"dtb:depth\" content=\"1\"/>\
@@ -164,8 +148,7 @@ fn ncx(book: &Book, toc: &[&TocEntry]) -> String {
         esc(&book.identifier),
         esc(&book.title)
     );
-    // Flat navMap: Kindle handles it, and nested depth adds little for books.
-    for (i, e) in toc.iter().enumerate() {
+    for (i, e) in book.toc.iter().enumerate() {
         s.push_str(&format!(
             "<navPoint id=\"nav{0}\" playOrder=\"{0}\"><navLabel><text>{1}</text></navLabel><content src=\"{2}\"/></navPoint>\n",
             i + 1,
