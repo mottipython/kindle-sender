@@ -116,7 +116,7 @@ fn test_epub_fixes_invalid_and_missing_language() {
 
         let file = File::open(&book).unwrap();
         let mut archive = zip::ZipArchive::new(file).unwrap();
-        assert_eq!(archive.by_index(0).unwrap().name(), "mimetype", "mimetype first in archive");
+        assert_eq!(archive.by_index(0).unwrap().name().unwrap(), "mimetype", "mimetype first in archive");
         assert_eq!(
             archive.by_index(0).unwrap().compression(),
             CompressionMethod::Stored,

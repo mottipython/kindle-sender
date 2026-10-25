@@ -1,12 +1,14 @@
 use std::collections::{HashMap, HashSet};
 use std::fs::File;
-use std::io::{Read, Write};
+use std::io::Read;
 use std::path::{Path, PathBuf};
 use std::process::Command;
 use image::GenericImageView;
 use regex::Regex;
 use serde::Deserialize;
 use thiserror::Error;
+
+use crate::native::{self, epub_meta, NativeError};
 
 pub const CONVERTIBLE: &[&str] = &[
     ".mobi", ".azw", ".azw3", ".prc", ".lit", ".pdf", ".fb2", ".rtf",
@@ -91,6 +93,39 @@ pub fn run_tool(args: &[&str]) -> Result<String, ToolError> {
     Ok(String::from_utf8_lossy(&output.stdout).to_string())
 }
 
+/// Formats only calibre can convert; everything else in `CONVERTIBLE` is built in.
+pub fn needs_calibre(ext: &str) -> bool {
+    CONVERTIBLE.contains(&ext) && !native::handles(ext)
+}
+
+/// Converts with the built-in converters, falling back to calibre if they cannot cope.
+/// Returns the engine that did the work.
+pub fn convert_book<P: AsRef<Path>, Q: AsRef<Path>>(src: P, dest: Q) -> Result<&'static str, ToolError> {
+    let ext = src
+        .as_ref()
+        .extension()
+        .and_then(|e| e.to_str())
+        .map(|e| format!(".{}", e.to_lowercase()))
+        .unwrap_or_default();
+
+    if native::handles(&ext) {
+        match native::convert(src.as_ref(), dest.as_ref(), &ext) {
+            Ok(()) => return Ok("built-in"),
+            Err(NativeError::Drm) => return Err(ToolError::Failed(NativeError::Drm.to_string())),
+            Err(native_err) => {
+                // Keep the built-in reason: it is the useful one if calibre is absent or fails too.
+                let _ = std::fs::remove_file(dest.as_ref());
+                return match convert_to_epub(src, dest) {
+                    Ok(_) => Ok("calibre"),
+                    Err(ToolError::NotFound(_)) => Err(ToolError::Failed(native_err.to_string())),
+                    Err(e) => Err(ToolError::Failed(format!("{}; calibre also failed: {}", native_err, e))),
+                };
+            }
+        }
+    }
+    convert_to_epub(src, dest).map(|_| "calibre")
+}
+
 pub fn convert_to_epub<P: AsRef<Path>, Q: AsRef<Path>>(src: P, dest: Q) -> Result<PathBuf, ToolError> {
     let src_str = src.as_ref().to_string_lossy();
     let dest_str = dest.as_ref().to_string_lossy();
@@ -103,6 +138,16 @@ pub fn convert_to_epub<P: AsRef<Path>, Q: AsRef<Path>>(src: P, dest: Q) -> Resul
 }
 
 pub fn read_metadata<P: AsRef<Path>>(path: P) -> Result<HashMap<String, String>, ToolError> {
+    if let Ok(m) = epub_meta::read(path.as_ref()) {
+        let mut meta = HashMap::new();
+        if let Some(t) = m.title {
+            meta.insert("title".to_string(), t);
+        }
+        if !m.authors.is_empty() {
+            meta.insert("author(s)".to_string(), m.authors.join(" & "));
+        }
+        return Ok(meta);
+    }
     let path_str = path.as_ref().to_string_lossy();
     let out = run_tool(&["ebook-meta", &path_str])?;
 
@@ -210,9 +255,7 @@ pub fn fix_metadata<P: AsRef<Path>>(epub_path: P, source_path: Option<&Path>) ->
     let mut changes = Vec::new();
 
     if let Some(opf) = sidecar_opf(src_ref) {
-        let opf_str = opf.to_string_lossy();
-        let epub_str = epub_ref.to_string_lossy();
-        run_tool(&["ebook-meta", &epub_str, "--from-opf", &opf_str])?;
+        epub_meta::merge_opf(epub_ref, &opf).map_err(|e| ToolError::Failed(e.to_string()))?;
         changes.push(format!("metadata: embedded from {}", opf.file_name().unwrap().to_string_lossy()));
         return Ok(changes);
     }
@@ -235,39 +278,33 @@ pub fn fix_metadata<P: AsRef<Path>>(epub_path: P, source_path: Option<&Path>) ->
     let ext = src_ref.extension().and_then(|e| e.to_str()).map(|e| format!(".{}", e.to_lowercase())).unwrap_or_default();
     let trust_filename = METADATA_POOR.contains(&ext.as_str());
 
-    let mut args: Vec<String> = vec!["ebook-meta".to_string(), epub_ref.to_string_lossy().to_string()];
+    let mut edit = epub_meta::Edit::default();
 
     if let Some(ref gt) = guess_title {
         if trust_filename || placeholder_title(title, src_ref) {
-            args.push("-t".to_string());
-            args.push(gt.clone());
-            args.push("--title-sort".to_string());
-            args.push(gt.clone());
+            edit.title = Some(gt.clone());
+            edit.title_sort = Some(gt.clone());
             changes.push(format!("metadata: title -> {:?}", gt));
         }
     }
 
     if let Some(ref ga) = guess_author {
         if trust_filename || placeholder_author(author, title, Some(stem)) {
-            args.push("-a".to_string());
-            args.push(ga.clone());
-            args.push("--author-sort".to_string());
-            args.push(sort_name(ga));
+            edit.author = Some(ga.clone());
+            edit.author_sort = Some(sort_name(ga));
             changes.push(format!("metadata: author -> {:?}", ga));
         }
     } else if placeholder_author(author, title, Some(stem)) {
         if let Some(a) = author {
             if a.to_lowercase() != "unknown" && !a.is_empty() {
-                args.push("-a".to_string());
-                args.push("Unknown".to_string());
+                edit.author = Some("Unknown".to_string());
                 changes.push(format!("metadata: cleared bogus author {:?}", a));
             }
         }
     }
 
-    if args.len() > 2 {
-        let args_slice: Vec<&str> = args.iter().map(|s| s.as_str()).collect();
-        run_tool(&args_slice)?;
+    if edit.title.is_some() || edit.author.is_some() {
+        epub_meta::edit(epub_ref, &edit).map_err(|e| ToolError::Failed(e.to_string()))?;
     }
 
     Ok(changes)
@@ -289,7 +326,7 @@ pub fn has_real_cover<P: AsRef<Path>>(epub_path: P, max_colors: usize) -> bool {
     let mut candidates = Vec::new();
     for i in 0..archive.len() {
         if let Ok(entry) = archive.by_index(i) {
-            let name = entry.name().to_string();
+            let name = entry.name().map(|n| n.into_owned()).unwrap_or_default();
             if cover_re1.is_match(&name) || (cover_re2.is_match(&name) && name.to_lowercase().contains("cover")) {
                 candidates.push(name);
             }
@@ -430,13 +467,8 @@ pub fn fetch_cover<P: AsRef<Path>, Q: AsRef<Path>>(
         return Ok(Vec::new());
     }
 
-    let cover_path = work_dir.as_ref().join("cover.jpg");
-    let mut f = File::create(&cover_path)?;
-    f.write_all(&data)?;
-
-    let epub_str = epub_path.as_ref().to_string_lossy();
-    let cover_str = cover_path.to_string_lossy();
-    run_tool(&["ebook-meta", &epub_str, "--cover", &cover_str])?;
+    let _ = work_dir;
+    epub_meta::set_cover(epub_path.as_ref(), &data).map_err(|e| ToolError::Failed(e.to_string()))?;
 
     Ok(vec![format!("cover: fetched from Open Library for {:?}", title)])
 }

@@ -409,14 +409,12 @@ fn cmd_doctor() -> anyhow::Result<()> {
     println!("Kindle Sender Doctor");
     println!("====================");
 
-    // Calibre tools
+    println!("✓ Built-in converters: MOBI, AZW, AZW3, PDF, FB2, TXT, HTML");
     let tools = ebook_tools::tools_available();
-    for (tool, available) in &tools {
-        if *available {
-            println!("✓ {:<14} found in PATH", tool);
-        } else {
-            println!("✗ {:<14} NOT found (optional: needed for conversion/metadata)", tool);
-        }
+    if tools.get("ebook-convert").copied().unwrap_or(false) {
+        println!("✓ calibre        found (also converts LIT, RTF, DOC/DOCX, CBZ/CBR, and any book the built-in converters cannot read)");
+    } else {
+        println!("! calibre        not installed (optional: only needed for LIT, RTF, DOC/DOCX, CBZ/CBR, PDB)");
     }
 
     // Keyring

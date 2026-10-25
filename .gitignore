@@ -8,3 +8,7 @@ __pycache__/
 *.rpm
 *.tar.gz
 /target/
+fuzz/target
+fuzz/corpus
+fuzz/artifacts
+target-u22/

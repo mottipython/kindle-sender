@@ -126,10 +126,10 @@ where
             return result;
         }
     } else if cfg.do_convert && ebook_tools::CONVERTIBLE.contains(&ext.as_str()) {
-        log(&format!("  converting {} -> epub (this can take a minute)", ext));
-        match ebook_tools::convert_to_epub(path_ref, &staged) {
-            Ok(_) => {
-                result.changes.push(format!("converted {} -> epub", ext));
+        log(&format!("  converting {} -> epub", ext));
+        match ebook_tools::convert_book(path_ref, &staged) {
+            Ok(engine) => {
+                result.changes.push(format!("converted {} -> epub ({})", ext, engine));
             }
             Err(e) => {
                 result.status = Status::Error;
