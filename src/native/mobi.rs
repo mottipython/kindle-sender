@@ -5,9 +5,9 @@ use std::path::Path;
 
 use regex::Regex;
 
-use super::epub_writer::{esc, sniff_image, Book, Chapter, Resource, TocEntry};
+use super::epub_writer::{sniff_image, Book, Chapter, Resource, TocEntry};
 use super::xhtml::{self, Hook, Hooks, PAGEBREAK_CLASS};
-use super::{fix_links, NativeError};
+use super::{book_id, fix_links, NativeError};
 
 const NONE: u32 = 0xFFFF_FFFF;
 
@@ -467,7 +467,7 @@ pub fn convert(path: &Path) -> Result<Book, NativeError> {
         return Err(NativeError::Drm);
     }
 
-    let mut book = Book { identifier: format!("urn:uuid:kindle-sender-{}", data.len()), ..Default::default() };
+    let mut book = Book { identifier: book_id(&data), ..Default::default() };
     let first_image = if h.first_image == NONE { pdb.len() } else { start + h.first_image as usize };
     let mut imgs = ImageSet { images: collect_images(&pdb, first_image), used: HashSet::new() };
 
@@ -499,7 +499,7 @@ pub fn convert(path: &Path) -> Result<Book, NativeError> {
     }
     if book.toc.is_empty() {
         for ch in &book.chapters {
-            book.toc.push(TocEntry { title: ch.title.clone(), href: ch.file.clone(), level: 0 });
+            book.toc.push(TocEntry { title: ch.title.clone(), href: ch.file.clone() });
         }
     }
     Ok(book)
@@ -609,7 +609,7 @@ fn mobi6(pdb: &Pdb, start: usize, h: &Header, mut text: Vec<u8>, book: &mut Book
         let id = format!("filepos{}", pos);
         if let Some(&part) = parsed.anchors.get(&id) {
             if part < files.len() {
-                book.toc.push(TocEntry { title: label, href: format!("{}#{}", files[part], id), level: 0 });
+                book.toc.push(TocEntry { title: label, href: format!("{}#{}", files[part], id) });
             }
         }
     }
@@ -634,7 +634,6 @@ fn base32(s: &str) -> Option<usize> {
 
 struct Fragment {
     insert_pos: usize,
-    file: usize,
     length: usize,
 }
 
@@ -657,14 +656,12 @@ fn kf8(pdb: &Pdb, start: usize, h: &Header, text: &[u8], book: &mut Book, imgs: 
     let main = &text[flows[0].0..flows[0].1];
 
     let (skel_entries, _) = read_index(pdb, start + h.skel_idx as usize)?;
-    let (frag_entries, frag_cncx) = read_index(pdb, start + h.chunk_idx as usize)?;
-    let _ = frag_cncx;
+    let (frag_entries, _) = read_index(pdb, start + h.chunk_idx as usize)?;
 
     let frags: Vec<Fragment> = frag_entries
         .iter()
         .map(|e| Fragment {
             insert_pos: std::str::from_utf8(&e.key).ok().and_then(|s| s.trim().parse().ok()).unwrap_or(0),
-            file: e.tags.get(&3).and_then(|v| v.first()).copied().unwrap_or(0) as usize,
             length: e.tags.get(&6).and_then(|v| v.get(1)).copied().unwrap_or(0) as usize,
         })
         .collect();
@@ -697,7 +694,6 @@ fn kf8(pdb: &Pdb, start: usize, h: &Header, text: &[u8], book: &mut Book, imgs: 
             frag_pos.push((part_no, at));
             base += f.length;
             fptr += 1;
-            let _ = f.file;
         }
         parts.push(skeleton);
     }
@@ -789,6 +785,7 @@ fn kf8(pdb: &Pdb, start: usize, h: &Header, text: &[u8], book: &mut Book, imgs: 
     // aid="..." becomes a real id wherever the element has none.
     let tag_re = Regex::new(r"<[^<>]+>").unwrap();
     let aid_re = Regex::new(r#"\said\s*=\s*["']([^"']+)["']"#).unwrap();
+    let has_id_re = Regex::new(r#"\sid\s*="#).unwrap();
     for s in strings.iter_mut() {
         *s = tag_re
             .replace_all(s, |c: &regex::Captures| {
@@ -796,8 +793,7 @@ fn kf8(pdb: &Pdb, start: usize, h: &Header, text: &[u8], book: &mut Book, imgs: 
                 if !t.contains("aid") {
                     return t.to_string();
                 }
-                let has_id = Regex::new(r#"\sid\s*="#).unwrap().is_match(t);
-                if has_id {
+                if has_id_re.is_match(t) {
                     aid_re.replace_all(t, "").into_owned()
                 } else {
                     aid_re.replace_all(t, " id=\"$1\"").into_owned()
@@ -814,22 +810,21 @@ fn kf8(pdb: &Pdb, start: usize, h: &Header, text: &[u8], book: &mut Book, imgs: 
                 let target = e.tags.get(&6).and_then(|v| if v.len() >= 2 { Some((v[0] as usize, v[1] as usize)) } else { None });
                 if let (Some(l), Some((fid, off))) = (label, target) {
                     if let Some(href) = resolve(fid, off, &snapshot) {
-                        let href = href.replace(|c| c == 'a', "a");
-                        book.toc.push(TocEntry { title: l, href, level: 0 });
+                        book.toc.push(TocEntry { title: l, href });
                     }
                 }
             }
         }
     }
 
+    let title_re = Regex::new(r"(?is)<title[^>]*>(.*?)</title>").unwrap();
     for (i, s) in strings.into_iter().enumerate() {
-        let title = Regex::new(r"(?is)<title[^>]*>(.*?)</title>")
-            .unwrap()
+        let title = title_re
             .captures(&s)
             .map(|c| c[1].trim().to_string())
             .filter(|t| !t.is_empty())
             .unwrap_or_else(|| format!("Part {}", i + 1));
-        book.chapters.push(Chapter { title: esc(&title), file: files[i].clone(), body: s, raw: true });
+        book.chapters.push(Chapter { title, file: files[i].clone(), body: s, raw: true });
     }
     book.resources.extend(resources);
     Ok(())

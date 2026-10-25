@@ -175,7 +175,7 @@ where
         if ebook_tools::has_real_cover(&staged, 64) {
             log("  cover looks fine, leaving it");
         } else {
-            match ebook_tools::fetch_cover(&staged, work_dir.path()) {
+            match ebook_tools::fetch_cover(&staged) {
                 Ok(changes) => {
                     if changes.is_empty() {
                         log("  no cover match on Open Library");

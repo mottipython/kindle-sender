@@ -48,6 +48,15 @@ pub fn convert(src: &Path, dest: &Path, ext: &str) -> Result<(), NativeError> {
     epub_writer::write(&book, dest)
 }
 
+/// A stable identifier derived from the book's bytes, so the same file always
+/// gets the same id and different files do not collide.
+pub fn book_id(bytes: &[u8]) -> String {
+    use std::hash::{Hash, Hasher};
+    let mut h = std::collections::hash_map::DefaultHasher::new();
+    bytes.hash(&mut h);
+    format!("urn:kindle-sender:{:016x}", h.finish())
+}
+
 /// Best-effort text decoding: UTF-8 (with BOM), else windows-1252.
 pub fn decode_bytes(raw: &[u8]) -> String {
     if let Some(rest) = raw.strip_prefix(&[0xEF, 0xBB, 0xBF]) {

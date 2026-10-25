@@ -93,11 +93,6 @@ pub fn run_tool(args: &[&str]) -> Result<String, ToolError> {
     Ok(String::from_utf8_lossy(&output.stdout).to_string())
 }
 
-/// Formats only calibre can convert; everything else in `CONVERTIBLE` is built in.
-pub fn needs_calibre(ext: &str) -> bool {
-    CONVERTIBLE.contains(&ext) && !native::handles(ext)
-}
-
 /// Converts with the built-in converters, falling back to calibre if they cannot cope.
 /// Returns the engine that did the work.
 pub fn convert_book<P: AsRef<Path>, Q: AsRef<Path>>(src: P, dest: Q) -> Result<&'static str, ToolError> {
@@ -434,10 +429,7 @@ pub fn search_openlibrary_cover(title: &str, author: Option<&str>) -> Option<Str
     None
 }
 
-pub fn fetch_cover<P: AsRef<Path>, Q: AsRef<Path>>(
-    epub_path: P,
-    work_dir: Q,
-) -> Result<Vec<String>, ToolError> {
+pub fn fetch_cover<P: AsRef<Path>>(epub_path: P) -> Result<Vec<String>, ToolError> {
     let meta = read_metadata(epub_path.as_ref())?;
     let title = meta.get("title").map(|s| s.as_str()).unwrap_or("");
     let bracket_re = Regex::new(r"\s*\[[^\]]*\]\s*$").unwrap();
@@ -467,7 +459,6 @@ pub fn fetch_cover<P: AsRef<Path>, Q: AsRef<Path>>(
         return Ok(Vec::new());
     }
 
-    let _ = work_dir;
     epub_meta::set_cover(epub_path.as_ref(), &data).map_err(|e| ToolError::Failed(e.to_string()))?;
 
     Ok(vec![format!("cover: fetched from Open Library for {:?}", title)])
