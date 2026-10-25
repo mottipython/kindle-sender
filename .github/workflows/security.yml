@@ -22,6 +22,23 @@ jobs:
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
 
+  snyk:
+    name: Snyk Code
+    runs-on: ubuntu-latest
+    # Fork pull requests cannot read the token; they are covered by CI and cargo audit.
+    if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
+    env:
+      SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: snyk/actions/setup@master
+      - name: snyk code test
+        if: env.SNYK_TOKEN != ''
+        run: snyk code test --severity-threshold=low
+      - name: Token missing
+        if: env.SNYK_TOKEN == ''
+        run: echo "::warning::SNYK_TOKEN repository secret is not set, so Snyk did not run."
+
   fuzz:
     name: fuzz (${{ matrix.target }}, AddressSanitizer)
     if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
