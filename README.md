@@ -157,6 +157,54 @@ cargo run --release --example native_check -- some.mobi other.azw3 book.pdf
 - Fuzzing: `cd fuzz && RUSTC_BOOTSTRAP=1 cargo fuzz run -s none native_convert -- -fork=8`
   (stable Rust; drop `-s none` on nightly for AddressSanitizer).
 
+## Security
+
+Ebook files are untrusted input, so every parser is built to reject bad files
+rather than trust them, and the project is checked with the following (last run
+2026-10-25 against v1.1.0):
+
+| Check | Result |
+| --- | --- |
+| **Snyk Code** static analysis (`snyk code test`) | 0 issues |
+| **cargo-audit** against the RustSec database | 0 vulnerabilities. The only notices are informational: unmaintained or yanked crates pulled in by the GUI toolkit |
+| **Fuzzing** (cargo-fuzz / libFuzzer, 8 workers) on the EPUB, MOBI/AZW/AZW3, FB2, PDF, TXT, HTML and metadata parsers | millions of executions, 0 crashes, hangs or out-of-memory. Run without AddressSanitizer, which Fedora's Rust does not ship |
+| **Tests** | real files in every built-in format run through the whole pipeline with an empty `PATH`, plus checks that corrupt and DRM files fail cleanly |
+
+Snyk's dependency scan does not support Cargo, which is why cargo-audit is used
+for dependencies. A dependency audit found, and this release fixes, three
+`zip` advisories (RUSTSEC-2026-0367/0368/0369, upgraded to zip 9) and a `tokio`
+race (RUSTSEC-2026-0384).
+
+How untrusted books are handled:
+
+- **Nothing in a book is executed.** Scripts, stylesheets and event handlers in
+  HTML/XHTML are dropped, and the output is rebuilt from an allow-list of
+  tags and attributes.
+- **No files are extracted to disk from an archive**, so zip path-traversal and
+  symlink tricks have nothing to act on. Archives are read in memory and
+  rewritten.
+- **Local images only.** The HTML converter embeds images from the book's own
+  folder, rejects `..` and absolute paths, and drops remote and `data:` images.
+- **XML:** FB2 is parsed with DTDs disabled (no entity-expansion tricks).
+- **Bounded work:** every read is bounds-checked, element nesting is capped,
+  and a PDF page that crashes the text extractor is skipped instead of taking
+  the app down.
+- **DRM and encrypted books** are reported as such, never "cracked" or
+  half-converted.
+- **Covers** fetched from Open Library are only embedded if they are a real
+  JPEG, PNG or GIF.
+
+How your account is protected:
+
+- Mail is sent over TLS only (STARTTLS on 587, implicit TLS on 465); there is no
+  plaintext fallback.
+- The app password goes in the system wallet (KWallet / GNOME Keyring). Without
+  one it falls back to `~/.config/kindle-sender/config.json`, mode `0600` in a
+  `0700` folder, and the Settings tab says which applies.
+- Attachments over 45 MB are refused locally instead of bouncing silently.
+
+Found a problem? Please open an issue on this repository.
+
 ## License
 
 MIT — see [LICENSE](LICENSE).
