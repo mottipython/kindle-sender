@@ -174,7 +174,10 @@ fn opf(book: &Book) -> String {
     }
     let lang = if book.language.is_empty() { "en" } else { &book.language };
     s.push_str(&format!("<dc:language>{}</dc:language>\n", esc(lang)));
-    s.push_str(&format!("<dc:identifier id=\"bookid\">{}</dc:identifier>\n", esc(&book.identifier)));
+    s.push_str(&format!(
+        "<dc:identifier id=\"bookid\">{}</dc:identifier>\n",
+        esc(&book.identifier)
+    ));
     if let Some(p) = &book.publisher {
         s.push_str(&format!("<dc:publisher>{}</dc:publisher>\n", esc(p)));
     }

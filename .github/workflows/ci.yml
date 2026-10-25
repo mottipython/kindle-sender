@@ -1,0 +1,25 @@
+name: CI
+
+on:
+  push:
+    branches: [rust, main]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v4
+      - name: System libraries
+        run: sudo apt-get update && sudo apt-get install -y pkg-config libssl-dev libdbus-1-dev libfontconfig1-dev libxkbcommon-dev
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: clippy, rustfmt
+      - uses: Swatinem/rust-cache@v2
+      - run: cargo fmt --check
+      - run: cargo clippy --all-targets -- -D warnings
+      # No calibre is installed here: the tests prove the built-in converters work without it.
+      - run: cargo test --release

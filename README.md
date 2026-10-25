@@ -1,5 +1,8 @@
 # Kindle Sender
 
+[![CI](https://github.com/mottipython/kindle-sender/actions/workflows/ci.yml/badge.svg)](https://github.com/mottipython/kindle-sender/actions/workflows/ci.yml)
+[![Security](https://github.com/mottipython/kindle-sender/actions/workflows/security.yml/badge.svg)](https://github.com/mottipython/kindle-sender/actions/workflows/security.yml)
+
 A small Linux desktop app that takes any ebook, repairs the things that break
 on a Kindle, tidies up its metadata and cover, and emails it to your
 Send-to-Kindle address.
@@ -203,7 +206,10 @@ How your account is protected:
   `0700` folder, and the Settings tab says which applies.
 - Attachments over 45 MB are refused locally instead of bouncing silently.
 
-Found a problem? Please open an issue on this repository.
+These checks run automatically on GitHub: CI on every push, `cargo audit` on every
+push and weekly, AddressSanitizer fuzzing weekly, Dependabot update PRs, and
+secret scanning. See [SECURITY.md](SECURITY.md) for the policy and how to report
+a vulnerability privately.
 
 ## License
 

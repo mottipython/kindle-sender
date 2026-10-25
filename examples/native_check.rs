@@ -31,7 +31,10 @@ fn words(xhtml: &str) -> usize {
 }
 
 fn check(src: &Path) -> Result<String, String> {
-    let ext = format!(".{}", src.extension().and_then(|e| e.to_str()).unwrap_or("").to_lowercase());
+    let ext = format!(
+        ".{}",
+        src.extension().and_then(|e| e.to_str()).unwrap_or("").to_lowercase()
+    );
     let dest = std::env::temp_dir().join(format!("native_check_{}.epub", std::process::id()));
     native::convert(src, &dest, &ext).map_err(|e| format!("convert: {}", e))?;
     kindle_sender::epub_fix::validate_epub(&dest).map_err(|e| format!("validate: {}", e))?;
@@ -55,7 +58,10 @@ fn check(src: &Path) -> Result<String, String> {
     let mut chapters = 0;
     let mut total_words = 0;
     for (name, s) in &docs {
-        let opts = roxmltree::ParsingOptions { allow_dtd: true, ..Default::default() };
+        let opts = roxmltree::ParsingOptions {
+            allow_dtd: true,
+            ..Default::default()
+        };
         let doc = match roxmltree::Document::parse_with_options(s, opts) {
             Ok(d) => d,
             Err(e) => {
@@ -68,7 +74,9 @@ fn check(src: &Path) -> Result<String, String> {
             total_words += words(s);
             ids.insert(
                 name.clone(),
-                doc.descendants().filter_map(|n| n.attribute("id").map(String::from)).collect(),
+                doc.descendants()
+                    .filter_map(|n| n.attribute("id").map(String::from))
+                    .collect(),
             );
         }
     }
@@ -79,14 +87,26 @@ fn check(src: &Path) -> Result<String, String> {
         if !name.ends_with(".xhtml") {
             continue;
         }
-        let Ok(doc) = roxmltree::Document::parse_with_options(s, roxmltree::ParsingOptions { allow_dtd: true, ..Default::default() }) else { continue };
+        let Ok(doc) = roxmltree::Document::parse_with_options(
+            s,
+            roxmltree::ParsingOptions {
+                allow_dtd: true,
+                ..Default::default()
+            },
+        ) else {
+            continue;
+        };
         let base = name.rsplit_once('/').map(|x| x.0).unwrap_or("");
         for n in doc.descendants().filter(|n| n.is_element()) {
             if let Some(h) = n.attribute("href") {
                 if n.tag_name().name() == "a" && !h.starts_with("http") && !h.starts_with("mailto:") {
                     links += 1;
                     let (file, frag) = h.split_once('#').unwrap_or((h, ""));
-                    let target = if file.is_empty() { name.clone() } else { format!("{}/{}", base, file) };
+                    let target = if file.is_empty() {
+                        name.clone()
+                    } else {
+                        format!("{}/{}", base, file)
+                    };
                     let ok_file = names.contains(&target);
                     let ok_frag = frag.is_empty() || ids.get(&target).is_some_and(|s| s.contains(frag));
                     if !(ok_file && ok_frag) {
@@ -113,7 +133,13 @@ fn check(src: &Path) -> Result<String, String> {
 
     let summary = format!(
         "{} chapters, {} words, {} images, {} links ({} dead), {} missing img, {} KB",
-        chapters, total_words, images, links, bad_links, bad_imgs, size / 1024
+        chapters,
+        total_words,
+        images,
+        links,
+        bad_links,
+        bad_imgs,
+        size / 1024
     );
     if problems.is_empty() {
         Ok(summary)

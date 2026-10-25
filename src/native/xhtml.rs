@@ -33,13 +33,65 @@ pub struct Parsed {
 }
 
 const ALLOWED_TAGS: &[&str] = &[
-    "a", "abbr", "b", "bdo", "big", "blockquote", "br", "caption", "cite", "code", "col", "colgroup", "dd",
-    "del", "dfn", "div", "dl", "dt", "em", "h1", "h2", "h3", "h4", "h5", "h6", "hr", "i", "img", "ins", "kbd",
-    "li", "ol", "p", "pre", "q", "s", "samp", "small", "span", "strike", "strong", "sub", "sup", "table",
-    "tbody", "td", "tfoot", "th", "thead", "tr", "tt", "u", "ul", "var",
+    "a",
+    "abbr",
+    "b",
+    "bdo",
+    "big",
+    "blockquote",
+    "br",
+    "caption",
+    "cite",
+    "code",
+    "col",
+    "colgroup",
+    "dd",
+    "del",
+    "dfn",
+    "div",
+    "dl",
+    "dt",
+    "em",
+    "h1",
+    "h2",
+    "h3",
+    "h4",
+    "h5",
+    "h6",
+    "hr",
+    "i",
+    "img",
+    "ins",
+    "kbd",
+    "li",
+    "ol",
+    "p",
+    "pre",
+    "q",
+    "s",
+    "samp",
+    "small",
+    "span",
+    "strike",
+    "strong",
+    "sub",
+    "sup",
+    "table",
+    "tbody",
+    "td",
+    "tfoot",
+    "th",
+    "thead",
+    "tr",
+    "tt",
+    "u",
+    "ul",
+    "var",
 ];
 const VOID_TAGS: &[&str] = &["br", "hr", "img", "col"];
-const SKIP_TAGS: &[&str] = &["script", "style", "head", "meta", "link", "title", "noscript", "template"];
+const SKIP_TAGS: &[&str] = &[
+    "script", "style", "head", "meta", "link", "title", "noscript", "template",
+];
 
 struct Ser<'a> {
     hooks: &'a mut dyn Hooks,
@@ -148,7 +200,11 @@ impl Ser<'_> {
                     return;
                 }
                 if tag == "mbp:pagebreak"
-                    || (tag == "hr" && attrs.borrow().iter().any(|a| &*a.name.local == "class" && &*a.value == PAGEBREAK_CLASS))
+                    || (tag == "hr"
+                        && attrs
+                            .borrow()
+                            .iter()
+                            .any(|a| &*a.name.local == "class" && &*a.value == PAGEBREAK_CLASS))
                 {
                     self.page_break();
                     return;
@@ -170,7 +226,9 @@ impl Ser<'_> {
                             (_, "id") | (_, "class") | (_, "title") => (an.to_string(), value.to_string()),
                             ("a", "name") => ("id".to_string(), value.to_string()),
                             ("a", "href") | ("img", "src") | ("img", "alt") => (an.to_string(), value.to_string()),
-                            ("td" | "th", "colspan" | "rowspan") | ("ol", "start") => (an.to_string(), value.to_string()),
+                            ("td" | "th", "colspan" | "rowspan") | ("ol", "start") => {
+                                (an.to_string(), value.to_string())
+                            }
                             _ => continue,
                         },
                     };

@@ -1,11 +1,11 @@
-use std::fs;
-use std::path::Path;
-use std::time::Duration;
 use lettre::message::header::ContentType;
 use lettre::message::{Attachment, MultiPart, SinglePart};
 use lettre::transport::smtp::authentication::Credentials;
 use lettre::transport::smtp::client::{Tls, TlsParameters};
 use lettre::{Message, SmtpTransport, Transport};
+use std::fs;
+use std::path::Path;
+use std::time::Duration;
 use thiserror::Error;
 
 use crate::config::{clean_password, Config};
@@ -85,11 +85,7 @@ pub fn test_connection(cfg: &Config) -> Result<(), SendError> {
     }
 }
 
-pub fn send_book<P: AsRef<Path>>(
-    cfg: &Config,
-    path: P,
-    subject: Option<&str>,
-) -> Result<u64, SendError> {
+pub fn send_book<P: AsRef<Path>>(cfg: &Config, path: P, subject: Option<&str>) -> Result<u64, SendError> {
     let to_addr = cfg.kindle_addr.trim();
     let from_addr = if !cfg.from_addr.trim().is_empty() {
         cfg.from_addr.trim()
@@ -116,16 +112,10 @@ pub fn send_book<P: AsRef<Path>>(
         });
     }
 
-    let default_subject = file_path
-        .file_stem()
-        .and_then(|s| s.to_str())
-        .unwrap_or("book");
+    let default_subject = file_path.file_stem().and_then(|s| s.to_str()).unwrap_or("book");
     let subj = subject.unwrap_or(default_subject);
 
-    let filename = file_path
-        .file_name()
-        .and_then(|s| s.to_str())
-        .unwrap_or("book.epub");
+    let filename = file_path.file_name().and_then(|s| s.to_str()).unwrap_or("book.epub");
 
     let ext = file_path
         .extension()
@@ -147,8 +137,14 @@ pub fn send_book<P: AsRef<Path>>(
                      'Approved Personal Document E-mail List'.";
 
     let email = Message::builder()
-        .from(from_addr.parse().map_err(|e| SendError::MessageError(format!("Invalid From address: {}", e)))?)
-        .to(to_addr.parse().map_err(|e| SendError::MessageError(format!("Invalid To address: {}", e)))?)
+        .from(
+            from_addr
+                .parse()
+                .map_err(|e| SendError::MessageError(format!("Invalid From address: {}", e)))?,
+        )
+        .to(to_addr
+            .parse()
+            .map_err(|e| SendError::MessageError(format!("Invalid To address: {}", e)))?)
         .subject(subj)
         .multipart(
             MultiPart::mixed()

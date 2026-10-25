@@ -1,23 +1,22 @@
+use image::GenericImageView;
+use regex::Regex;
+use serde::Deserialize;
 use std::collections::{HashMap, HashSet};
 use std::fs::File;
 use std::io::Read;
 use std::path::{Path, PathBuf};
 use std::process::Command;
-use image::GenericImageView;
-use regex::Regex;
-use serde::Deserialize;
 use thiserror::Error;
 
 use crate::native::{self, epub_meta, NativeError};
 
 pub const CONVERTIBLE: &[&str] = &[
-    ".mobi", ".azw", ".azw3", ".prc", ".lit", ".pdf", ".fb2", ".rtf",
-    ".txt", ".doc", ".docx", ".html", ".htm", ".cbz", ".cbr", ".pdb",
+    ".mobi", ".azw", ".azw3", ".prc", ".lit", ".pdf", ".fb2", ".rtf", ".txt", ".doc", ".docx", ".html", ".htm", ".cbz",
+    ".cbr", ".pdb",
 ];
 
 pub const METADATA_POOR: &[&str] = &[
-    ".txt", ".rtf", ".html", ".htm", ".pdf", ".cbz", ".cbr",
-    ".doc", ".docx", ".pdb",
+    ".txt", ".rtf", ".html", ".htm", ".pdf", ".cbz", ".cbr", ".doc", ".docx", ".pdb",
 ];
 
 pub const OPEN_LIBRARY: &str = "https://openlibrary.org/search.json";
@@ -167,7 +166,11 @@ pub fn guess_from_filename<P: AsRef<Path>>(path: P) -> (Option<String>, Option<S
     };
 
     let parts_re = Regex::new(r"\s+-\s+").unwrap();
-    let parts: Vec<&str> = parts_re.split(&stem).map(|s| s.trim()).filter(|s| !s.is_empty()).collect();
+    let parts: Vec<&str> = parts_re
+        .split(&stem)
+        .map(|s| s.trim())
+        .filter(|s| !s.is_empty())
+        .collect();
 
     if parts.len() >= 2 {
         let first = parts[0];
@@ -251,7 +254,10 @@ pub fn fix_metadata<P: AsRef<Path>>(epub_path: P, source_path: Option<&Path>) ->
 
     if let Some(opf) = sidecar_opf(src_ref) {
         epub_meta::merge_opf(epub_ref, &opf).map_err(|e| ToolError::Failed(e.to_string()))?;
-        changes.push(format!("metadata: embedded from {}", opf.file_name().unwrap().to_string_lossy()));
+        changes.push(format!(
+            "metadata: embedded from {}",
+            opf.file_name().unwrap().to_string_lossy()
+        ));
         return Ok(changes);
     }
 
@@ -270,7 +276,11 @@ pub fn fix_metadata<P: AsRef<Path>>(epub_path: P, source_path: Option<&Path>) ->
     let stem = src_ref.file_stem().and_then(|s| s.to_str()).unwrap_or("");
     let (guess_title, guess_author) = guess_from_filename(src_ref);
 
-    let ext = src_ref.extension().and_then(|e| e.to_str()).map(|e| format!(".{}", e.to_lowercase())).unwrap_or_default();
+    let ext = src_ref
+        .extension()
+        .and_then(|e| e.to_str())
+        .map(|e| format!(".{}", e.to_lowercase()))
+        .unwrap_or_default();
     let trust_filename = METADATA_POOR.contains(&ext.as_str());
 
     let mut edit = epub_meta::Edit::default();
@@ -397,7 +407,9 @@ pub fn search_openlibrary_cover(title: &str, author: Option<&str>) -> Option<Str
         .filter(|w| w.len() > 2)
         .collect();
 
-    let surname = author.and_then(|a| a.split_whitespace().last()).map(|s| s.to_lowercase());
+    let surname = author
+        .and_then(|a| a.split_whitespace().last())
+        .map(|s| s.to_lowercase());
 
     for doc in docs {
         let cover_id = match doc.cover_i {
@@ -433,7 +445,9 @@ pub fn fetch_cover<P: AsRef<Path>>(epub_path: P) -> Result<Vec<String>, ToolErro
     let meta = read_metadata(epub_path.as_ref())?;
     let title = meta.get("title").map(|s| s.as_str()).unwrap_or("");
     let bracket_re = Regex::new(r"\s*\[[^\]]*\]\s*$").unwrap();
-    let author = meta.get("author(s)").map(|s| bracket_re.replace(s, "").trim().to_string());
+    let author = meta
+        .get("author(s)")
+        .map(|s| bracket_re.replace(s, "").trim().to_string());
 
     if title.is_empty() || title.eq_ignore_ascii_case("unknown") {
         return Ok(Vec::new());

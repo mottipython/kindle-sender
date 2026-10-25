@@ -88,7 +88,9 @@ fn parse_header(r0: &[u8]) -> Result<Header, NativeError> {
         return corrupt("missing book header");
     }
     if r0.get(16..20) != Some(b"MOBI") {
-        return Err(NativeError::Unsupported("not a MOBI book (plain PalmDOC is not supported)".into()));
+        return Err(NativeError::Unsupported(
+            "not a MOBI book (plain PalmDOC is not supported)".into(),
+        ));
     }
     let hlen = be32(r0, 20).unwrap_or(0) as usize;
     let mut h = Header {
@@ -119,7 +121,10 @@ fn parse_header(r0: &[u8]) -> Result<Header, NativeError> {
         h.fdst_idx = be32(r0, 0xC0).unwrap_or(NONE);
     }
 
-    let (no, nl) = (be32(r0, 0x54).unwrap_or(0) as usize, be32(r0, 0x58).unwrap_or(0) as usize);
+    let (no, nl) = (
+        be32(r0, 0x54).unwrap_or(0) as usize,
+        be32(r0, 0x58).unwrap_or(0) as usize,
+    );
     if let Some(name) = r0.get(no..no.saturating_add(nl)) {
         h.full_name = String::from_utf8_lossy(name).trim().to_string();
     }
@@ -131,7 +136,9 @@ fn parse_header(r0: &[u8]) -> Result<Header, NativeError> {
         let count = be32(r0, ex + 8).unwrap_or(0);
         let mut p = ex + 12;
         for _ in 0..count {
-            let (Some(t), Some(l)) = (be32(r0, p), be32(r0, p + 4)) else { break };
+            let (Some(t), Some(l)) = (be32(r0, p), be32(r0, p + 4)) else {
+                break;
+            };
             let l = l as usize;
             if l < 8 {
                 break;
@@ -149,7 +156,12 @@ impl Header {
     fn exth_str(&self, t: u32) -> Vec<String> {
         self.exth
             .get(&t)
-            .map(|v| v.iter().map(|b| String::from_utf8_lossy(b).trim().to_string()).filter(|s| !s.is_empty()).collect())
+            .map(|v| {
+                v.iter()
+                    .map(|b| String::from_utf8_lossy(b).trim().to_string())
+                    .filter(|s| !s.is_empty())
+                    .collect()
+            })
             .unwrap_or_default()
     }
 
@@ -290,7 +302,10 @@ fn read_index(pdb: &Pdb, idx: usize) -> Result<(Vec<IndexEntry>, HashMap<u32, St
             if used == 0 || end > rec.len() {
                 break;
             }
-            cncx.insert((k * 0x10000 + off) as u32, String::from_utf8_lossy(&rec[pos..end]).into_owned());
+            cncx.insert(
+                (k * 0x10000 + off) as u32,
+                String::from_utf8_lossy(&rec[pos..end]).into_owned(),
+            );
             pos = end;
         }
     }
@@ -319,7 +334,9 @@ fn read_index(pdb: &Pdb, idx: usize) -> Result<(Vec<IndexEntry>, HashMap<u32, St
         if data.get(idxt..idxt + 4) != Some(b"IDXT") || n > 65536 {
             return corrupt("bad IDXT table");
         }
-        let mut pos: Vec<usize> = (0..n).map(|j| be16(data, idxt + 4 + 2 * j).unwrap_or(0) as usize).collect();
+        let mut pos: Vec<usize> = (0..n)
+            .map(|j| be16(data, idxt + 4 + 2 * j).unwrap_or(0) as usize)
+            .collect();
         pos.push(idxt);
         for j in 0..n {
             let (start, end) = (pos[j], pos[j + 1].min(data.len()));
@@ -412,7 +429,11 @@ fn collect_images(pdb: &Pdb, first: usize) -> Vec<Option<Image>> {
     (first..pdb.len())
         .map(|i| {
             let rec = pdb.rec(i);
-            sniff_image(rec).map(|(ext, media)| Image { ext, media, data: rec.to_vec() })
+            sniff_image(rec).map(|(ext, media)| Image {
+                ext,
+                media,
+                data: rec.to_vec(),
+            })
         })
         .collect()
 }
@@ -435,7 +456,13 @@ impl ImageSet {
             .into_iter()
             .enumerate()
             .filter(|(n, _)| used.contains(n))
-            .filter_map(|(n, i)| i.map(|i| Resource { path: format!("images/img{}.{}", n + 1, i.ext), media_type: i.media.into(), data: i.data }))
+            .filter_map(|(n, i)| {
+                i.map(|i| Resource {
+                    path: format!("images/img{}.{}", n + 1, i.ext),
+                    media_type: i.media.into(),
+                    data: i.data,
+                })
+            })
             .collect()
     }
 }
@@ -467,14 +494,27 @@ pub fn convert(path: &Path) -> Result<Book, NativeError> {
         return Err(NativeError::Drm);
     }
 
-    let mut book = Book { identifier: book_id(&data), ..Default::default() };
-    let first_image = if h.first_image == NONE { pdb.len() } else { start + h.first_image as usize };
-    let mut imgs = ImageSet { images: collect_images(&pdb, first_image), used: HashSet::new() };
+    let mut book = Book {
+        identifier: book_id(&data),
+        ..Default::default()
+    };
+    let first_image = if h.first_image == NONE {
+        pdb.len()
+    } else {
+        start + h.first_image as usize
+    };
+    let mut imgs = ImageSet {
+        images: collect_images(&pdb, first_image),
+        used: HashSet::new(),
+    };
 
     // Metadata
-    book.title = h.exth_str(503).into_iter().next().or_else(|| Some(h.full_name.clone()).filter(|s| !s.is_empty())).unwrap_or_else(|| {
-        path.file_stem().and_then(|s| s.to_str()).unwrap_or("book").to_string()
-    });
+    book.title = h
+        .exth_str(503)
+        .into_iter()
+        .next()
+        .or_else(|| Some(h.full_name.clone()).filter(|s| !s.is_empty()))
+        .unwrap_or_else(|| path.file_stem().and_then(|s| s.to_str()).unwrap_or("book").to_string());
     book.authors = h.exth_str(100);
     book.publisher = h.exth_str(101).into_iter().next();
     book.description = h.exth_str(103).into_iter().next();
@@ -499,7 +539,10 @@ pub fn convert(path: &Path) -> Result<Book, NativeError> {
     }
     if book.toc.is_empty() {
         for ch in &book.chapters {
-            book.toc.push(TocEntry { title: ch.title.clone(), href: ch.file.clone() });
+            book.toc.push(TocEntry {
+                title: ch.title.clone(),
+                href: ch.file.clone(),
+            });
         }
     }
     Ok(book)
@@ -522,7 +565,13 @@ struct Mobi6Hooks<'a> {
 impl Hooks for Mobi6Hooks<'_> {
     fn attr(&mut self, tag: &str, name: &str, value: &str) -> Hook {
         match (tag, name) {
-            ("img", "recindex") => match value.trim().parse::<usize>().ok().and_then(|n| n.checked_sub(1)).and_then(|n| self.imgs.path(n)) {
+            ("img", "recindex") => match value
+                .trim()
+                .parse::<usize>()
+                .ok()
+                .and_then(|n| n.checked_sub(1))
+                .and_then(|n| self.imgs.path(n))
+            {
                 Some(p) => Hook::Set("src".into(), p),
                 None => Hook::Drop,
             },
@@ -530,19 +579,33 @@ impl Hooks for Mobi6Hooks<'_> {
                 Ok(n) => Hook::Set("href".into(), format!("#filepos{}", n)),
                 Err(_) => Hook::Drop,
             },
-            ("a", "href") if !(value.starts_with("http") || value.starts_with('#') || value.starts_with("mailto:")) => Hook::Drop,
+            ("a", "href") if !(value.starts_with("http") || value.starts_with('#') || value.starts_with("mailto:")) => {
+                Hook::Drop
+            }
             _ => Hook::Pass,
         }
     }
 }
 
-fn mobi6(pdb: &Pdb, start: usize, h: &Header, mut text: Vec<u8>, book: &mut Book, imgs: &mut ImageSet) -> Result<(), NativeError> {
+fn mobi6(
+    pdb: &Pdb,
+    start: usize,
+    h: &Header,
+    mut text: Vec<u8>,
+    book: &mut Book,
+    imgs: &mut ImageSet,
+) -> Result<(), NativeError> {
     // NCX gives the real table of contents (label + byte offset into the text).
     let mut ncx: Vec<(String, u64)> = Vec::new();
     if h.ncx_idx != NONE {
         if let Ok((entries, cncx)) = read_index(pdb, start + h.ncx_idx as usize) {
             for e in entries {
-                let label = e.tags.get(&3).and_then(|v| v.first()).and_then(|o| cncx.get(o)).cloned();
+                let label = e
+                    .tags
+                    .get(&3)
+                    .and_then(|v| v.first())
+                    .and_then(|o| cncx.get(o))
+                    .cloned();
                 let pos = e.tags.get(&1).and_then(|v| v.first()).copied();
                 if let (Some(l), Some(p)) = (label, pos) {
                     ncx.push((l, p as u64));
@@ -586,11 +649,17 @@ fn mobi6(pdb: &Pdb, start: usize, h: &Header, mut text: Vec<u8>, book: &mut Book
     let mut html = decode(h, &text);
     let pb = Regex::new(r"(?i)</?mbp:pagebreak[^>]*>").unwrap();
     if pb.is_match(&html) {
-        html = pb.replace_all(&html, format!("<hr class=\"{}\"/>", PAGEBREAK_CLASS).as_str()).into_owned();
+        html = pb
+            .replace_all(&html, format!("<hr class=\"{}\"/>", PAGEBREAK_CLASS).as_str())
+            .into_owned();
     } else {
         // No explicit breaks: start a new file at each major heading.
         let hd = Regex::new(r"(?i)<h[12][\s>]").unwrap();
-        html = hd.replace_all(&html, |c: &regex::Captures| format!("<hr class=\"{}\"/>{}", PAGEBREAK_CLASS, &c[0])).into_owned();
+        html = hd
+            .replace_all(&html, |c: &regex::Captures| {
+                format!("<hr class=\"{}\"/>{}", PAGEBREAK_CLASS, &c[0])
+            })
+            .into_owned();
     }
 
     let mut hooks = Mobi6Hooks { imgs };
@@ -598,18 +667,28 @@ fn mobi6(pdb: &Pdb, start: usize, h: &Header, mut text: Vec<u8>, book: &mut Book
     if parsed.parts.is_empty() {
         return corrupt("no readable text in the book");
     }
-    let files: Vec<String> = (0..parsed.parts.len()).map(|i| format!("chapter{}.xhtml", i + 1)).collect();
+    let files: Vec<String> = (0..parsed.parts.len())
+        .map(|i| format!("chapter{}.xhtml", i + 1))
+        .collect();
     fix_links(&mut parsed.parts, &files, &parsed.anchors);
 
     for (i, body) in parsed.parts.into_iter().enumerate() {
         let title = parsed.titles[i].clone().unwrap_or_else(|| format!("Part {}", i + 1));
-        book.chapters.push(Chapter { title, file: files[i].clone(), body, raw: false });
+        book.chapters.push(Chapter {
+            title,
+            file: files[i].clone(),
+            body,
+            raw: false,
+        });
     }
     for (label, pos) in ncx {
         let id = format!("filepos{}", pos);
         if let Some(&part) = parsed.anchors.get(&id) {
             if part < files.len() {
-                book.toc.push(TocEntry { title: label, href: format!("{}#{}", files[part], id) });
+                book.toc.push(TocEntry {
+                    title: label,
+                    href: format!("{}#{}", files[part], id),
+                });
             }
         }
     }
@@ -637,7 +716,14 @@ struct Fragment {
     length: usize,
 }
 
-fn kf8(pdb: &Pdb, start: usize, h: &Header, text: &[u8], book: &mut Book, imgs: &mut ImageSet) -> Result<(), NativeError> {
+fn kf8(
+    pdb: &Pdb,
+    start: usize,
+    h: &Header,
+    text: &[u8],
+    book: &mut Book,
+    imgs: &mut ImageSet,
+) -> Result<(), NativeError> {
     // Flow table: flow 0 is the markup, the rest are CSS / SVG.
     let mut flows: Vec<(usize, usize)> = vec![(0, text.len())];
     if h.fdst_idx != NONE {
@@ -661,7 +747,10 @@ fn kf8(pdb: &Pdb, start: usize, h: &Header, text: &[u8], book: &mut Book, imgs: 
     let frags: Vec<Fragment> = frag_entries
         .iter()
         .map(|e| Fragment {
-            insert_pos: std::str::from_utf8(&e.key).ok().and_then(|s| s.trim().parse().ok()).unwrap_or(0),
+            insert_pos: std::str::from_utf8(&e.key)
+                .ok()
+                .and_then(|s| s.trim().parse().ok())
+                .unwrap_or(0),
             length: e.tags.get(&6).and_then(|v| v.get(1)).copied().unwrap_or(0) as usize,
         })
         .collect();
@@ -684,7 +773,9 @@ fn kf8(pdb: &Pdb, start: usize, h: &Header, text: &[u8], book: &mut Book, imgs: 
         let mut skeleton = main[spos..base].to_vec();
         let part_no = parts.len();
         for _ in 0..count {
-            let Some(f) = frags.get(fptr) else { return corrupt("fragment table too short") };
+            let Some(f) = frags.get(fptr) else {
+                return corrupt("fragment table too short");
+            };
             if base + f.length > main.len() {
                 return corrupt("fragment outside the text");
             }
@@ -723,11 +814,17 @@ fn kf8(pdb: &Pdb, start: usize, h: &Header, text: &[u8], book: &mut Book, imgs: 
     let rewrite_res = |s: &str, imgs: &mut ImageSet| -> String {
         let s = embed
             .replace_all(s, |c: &regex::Captures| {
-                base32(&c[1]).and_then(|n| n.checked_sub(1)).and_then(|n| imgs.path(n)).unwrap_or_default()
+                base32(&c[1])
+                    .and_then(|n| n.checked_sub(1))
+                    .and_then(|n| imgs.path(n))
+                    .unwrap_or_default()
             })
             .into_owned();
         flow.replace_all(&s, |c: &regex::Captures| {
-            base32(&c[1]).and_then(|n| flow_files.get(&n)).map(|(p, _)| p.clone()).unwrap_or_default()
+            base32(&c[1])
+                .and_then(|n| flow_files.get(&n))
+                .map(|(p, _)| p.clone())
+                .unwrap_or_default()
         })
         .into_owned()
     };
@@ -741,7 +838,11 @@ fn kf8(pdb: &Pdb, start: usize, h: &Header, text: &[u8], book: &mut Book, imgs: 
     for i in flow_ids {
         let (path, media) = flow_files[&i].clone();
         let body = rewrite_res(&css[&i], imgs);
-        resources.push(Resource { path, media_type: media.into(), data: body.into_bytes() });
+        resources.push(Resource {
+            path,
+            media_type: media.into(),
+            data: body.into_bytes(),
+        });
     }
 
     // Internal links: kindle:pos:fid:XXXX:off:YYYYYYYYYY
@@ -776,7 +877,9 @@ fn kf8(pdb: &Pdb, start: usize, h: &Header, text: &[u8], book: &mut Book, imgs: 
     for s in strings.iter_mut() {
         *s = pos_re
             .replace_all(s, |c: &regex::Captures| {
-                let (Some(fid), Some(off)) = (base32(&c[1]), base32(&c[2])) else { return "#".to_string() };
+                let (Some(fid), Some(off)) = (base32(&c[1]), base32(&c[2])) else {
+                    return "#".to_string();
+                };
                 resolve(fid, off, &snapshot).unwrap_or_else(|| "#".to_string())
             })
             .into_owned();
@@ -806,8 +909,19 @@ fn kf8(pdb: &Pdb, start: usize, h: &Header, text: &[u8], book: &mut Book, imgs: 
     if h.ncx_idx != NONE {
         if let Ok((entries, cncx)) = read_index(pdb, start + h.ncx_idx as usize) {
             for e in entries {
-                let label = e.tags.get(&3).and_then(|v| v.first()).and_then(|o| cncx.get(o)).cloned();
-                let target = e.tags.get(&6).and_then(|v| if v.len() >= 2 { Some((v[0] as usize, v[1] as usize)) } else { None });
+                let label = e
+                    .tags
+                    .get(&3)
+                    .and_then(|v| v.first())
+                    .and_then(|o| cncx.get(o))
+                    .cloned();
+                let target = e.tags.get(&6).and_then(|v| {
+                    if v.len() >= 2 {
+                        Some((v[0] as usize, v[1] as usize))
+                    } else {
+                        None
+                    }
+                });
                 if let (Some(l), Some((fid, off))) = (label, target) {
                     if let Some(href) = resolve(fid, off, &snapshot) {
                         book.toc.push(TocEntry { title: l, href });
@@ -824,7 +938,12 @@ fn kf8(pdb: &Pdb, start: usize, h: &Header, text: &[u8], book: &mut Book, imgs: 
             .map(|c| c[1].trim().to_string())
             .filter(|t| !t.is_empty())
             .unwrap_or_else(|| format!("Part {}", i + 1));
-        book.chapters.push(Chapter { title, file: files[i].clone(), body: s, raw: true });
+        book.chapters.push(Chapter {
+            title,
+            file: files[i].clone(),
+            body: s,
+            raw: true,
+        });
     }
     book.resources.extend(resources);
     Ok(())
@@ -845,15 +964,27 @@ fn palmdoc(path: &Path, pdb: &Pdb) -> Result<Book, NativeError> {
         return Err(NativeError::Drm);
     }
     let text = raw_text(pdb, 0, &h)?;
-    let text = encoding_rs::WINDOWS_1252.decode(&text).0.replace("\r\n", "\n").replace('\r', "\n");
+    let text = encoding_rs::WINDOWS_1252
+        .decode(&text)
+        .0
+        .replace("\r\n", "\n")
+        .replace('\r', "\n");
     let title = String::from_utf8_lossy(&pdb.data[..32.min(pdb.data.len())])
         .split('\0')
         .next()
         .unwrap_or("")
         .trim()
         .to_string();
-    let title = if title.is_empty() { path.file_stem().and_then(|s| s.to_str()).unwrap_or("book").to_string() } else { title };
-    let paras: Vec<String> = text.split("\n\n").map(|p| p.split_whitespace().collect::<Vec<_>>().join(" ")).filter(|p| !p.is_empty()).collect();
+    let title = if title.is_empty() {
+        path.file_stem().and_then(|s| s.to_str()).unwrap_or("book").to_string()
+    } else {
+        title
+    };
+    let paras: Vec<String> = text
+        .split("\n\n")
+        .map(|p| p.split_whitespace().collect::<Vec<_>>().join(" "))
+        .filter(|p| !p.is_empty())
+        .collect();
     if paras.is_empty() {
         return corrupt("the book has no text");
     }

@@ -1,4 +1,3 @@
-use std::path::PathBuf;
 use clap::{Parser, Subcommand};
 use kindle_sender::config;
 use kindle_sender::ebook_tools;
@@ -6,6 +5,7 @@ use kindle_sender::epub_fix;
 use kindle_sender::pipeline::{process_file, Status};
 use kindle_sender::sender;
 use kindle_sender::watcher::{self, FolderWatcher};
+use std::path::PathBuf;
 
 #[derive(Parser, Debug)]
 #[command(
@@ -98,10 +98,7 @@ enum ConfigAction {
     /// Show current settings
     Show,
     /// Set a configuration key (e.g. kindle_addr, from_addr, smtp_user, smtp_host, smtp_port)
-    Set {
-        key: String,
-        value: String,
-    },
+    Set { key: String, value: String },
     /// Set SMTP app password (stored in system keyring if available)
     SetPassword {
         /// App password (omit to be prompted securely)
@@ -331,17 +328,52 @@ fn cmd_config(action: Option<ConfigAction>) -> anyhow::Result<()> {
     match action {
         Some(ConfigAction::Show) | None => {
             println!("Configuration ({}):", config::config_path().display());
-            println!("  Kindle address:       {}", if cfg.kindle_addr.is_empty() { "<not set>" } else { &cfg.kindle_addr });
-            println!("  From address:         {}", if cfg.from_addr.is_empty() { "<not set>" } else { &cfg.from_addr });
+            println!(
+                "  Kindle address:       {}",
+                if cfg.kindle_addr.is_empty() {
+                    "<not set>"
+                } else {
+                    &cfg.kindle_addr
+                }
+            );
+            println!(
+                "  From address:         {}",
+                if cfg.from_addr.is_empty() {
+                    "<not set>"
+                } else {
+                    &cfg.from_addr
+                }
+            );
             println!("  SMTP host:            {}", cfg.smtp_host);
             println!("  SMTP port:            {}", cfg.smtp_port);
-            println!("  SMTP user:            {}", if cfg.smtp_user.is_empty() { "<not set>" } else { &cfg.smtp_user });
-            println!("  SMTP password:        {}", if cfg.smtp_password.is_empty() { "<not set>" } else { "********" });
+            println!(
+                "  SMTP user:            {}",
+                if cfg.smtp_user.is_empty() {
+                    "<not set>"
+                } else {
+                    &cfg.smtp_user
+                }
+            );
+            println!(
+                "  SMTP password:        {}",
+                if cfg.smtp_password.is_empty() {
+                    "<not set>"
+                } else {
+                    "********"
+                }
+            );
             println!("  Password in wallet:   {}", cfg.password_in_wallet);
             println!("  Watch folder:         {}", cfg.watch_folder);
             println!("  Watch enabled:        {}", cfg.watch_enabled);
             println!("  Keep copy:            {}", cfg.keep_copy);
-            println!("  Output dir:           {}", if cfg.output_dir.is_empty() { "<none>" } else { &cfg.output_dir });
+            println!(
+                "  Output dir:           {}",
+                if cfg.output_dir.is_empty() {
+                    "<none>"
+                } else {
+                    &cfg.output_dir
+                }
+            );
             println!("  Default language:     {}", cfg.default_lang);
             println!("  Max attachment (MB):  {}", cfg.max_attach_mb);
             println!("\nStorage: {}", config::storage_note());
@@ -360,7 +392,10 @@ fn cmd_config(action: Option<ConfigAction>) -> anyhow::Result<()> {
                 "default_lang" => cfg.default_lang = value.clone(),
                 "max_attach_mb" => cfg.max_attach_mb = value.parse()?,
                 _ => {
-                    eprintln!("Unknown config key: {}. Run 'kindle-sender config show' to see valid keys.", key);
+                    eprintln!(
+                        "Unknown config key: {}. Run 'kindle-sender config show' to see valid keys.",
+                        key
+                    );
                     std::process::exit(1);
                 }
             }
@@ -430,10 +465,18 @@ fn cmd_doctor() -> anyhow::Result<()> {
         println!("✓ Email setup    configured and ready to send");
     } else {
         println!("✗ Email setup    incomplete:");
-        if cfg.kindle_addr.is_empty() { println!("    - Missing Kindle address"); }
-        if cfg.from_addr.is_empty() && cfg.smtp_user.is_empty() { println!("    - Missing From/User address"); }
-        if cfg.smtp_host.is_empty() { println!("    - Missing SMTP host"); }
-        if cfg.smtp_password.is_empty() { println!("    - Missing SMTP password"); }
+        if cfg.kindle_addr.is_empty() {
+            println!("    - Missing Kindle address");
+        }
+        if cfg.from_addr.is_empty() && cfg.smtp_user.is_empty() {
+            println!("    - Missing From/User address");
+        }
+        if cfg.smtp_host.is_empty() {
+            println!("    - Missing SMTP host");
+        }
+        if cfg.smtp_password.is_empty() {
+            println!("    - Missing SMTP password");
+        }
     }
 
     if let Some(warn) = config::kindle_address_warning(&cfg.kindle_addr) {

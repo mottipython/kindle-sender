@@ -1,8 +1,8 @@
+use regex::Regex;
 use std::collections::{HashMap, HashSet};
 use std::fs::File;
 use std::io::{Read, Write};
 use std::path::Path;
-use regex::Regex;
 use thiserror::Error;
 use zip::write::SimpleFileOptions;
 use zip::CompressionMethod;
@@ -40,8 +40,8 @@ pub fn normalize_posix_path(path: &str) -> String {
 
 /// Join posix base directory and relative path, then normalize
 pub fn join_posix_path(base_dir: &str, relative: &str) -> String {
-    if relative.starts_with('/') {
-        normalize_posix_path(&relative[1..])
+    if let Some(rest) = relative.strip_prefix('/') {
+        normalize_posix_path(rest)
     } else if base_dir.is_empty() {
         normalize_posix_path(relative)
     } else {
@@ -58,7 +58,10 @@ pub fn posix_dirname(path: &str) -> &str {
 }
 
 /// Read all entries from an EPUB archive into memory.
-pub fn read_all<P: AsRef<Path>>(path: P) -> Result<(Vec<String>, HashMap<String, Vec<u8>>), EpubFixError> {
+/// Entry names in archive order, and every entry's bytes by name.
+pub type EpubContents = (Vec<String>, HashMap<String, Vec<u8>>);
+
+pub fn read_all<P: AsRef<Path>>(path: P) -> Result<EpubContents, EpubFixError> {
     let file = File::open(path.as_ref()).map_err(|e| EpubFixError::NotAZip(e.to_string()))?;
     let mut archive = zip::ZipArchive::new(file).map_err(|e| EpubFixError::NotAZip(e.to_string()))?;
 
@@ -66,10 +69,14 @@ pub fn read_all<P: AsRef<Path>>(path: P) -> Result<(Vec<String>, HashMap<String,
     let mut files = HashMap::new();
 
     for i in 0..archive.len() {
-        let mut entry = archive.by_index(i).map_err(|e| EpubFixError::CorruptEntry(e.to_string()))?;
+        let mut entry = archive
+            .by_index(i)
+            .map_err(|e| EpubFixError::CorruptEntry(e.to_string()))?;
         let name = entry.name().map(|n| n.into_owned()).unwrap_or_default();
         let mut data = Vec::with_capacity(entry.size() as usize);
-        entry.read_to_end(&mut data).map_err(|e| EpubFixError::CorruptEntry(format!("{}: {}", name, e)))?;
+        entry
+            .read_to_end(&mut data)
+            .map_err(|e| EpubFixError::CorruptEntry(format!("{}: {}", name, e)))?;
         names.push(name.clone());
         files.insert(name, data);
     }
@@ -120,11 +127,7 @@ pub fn fix_encoding(files: &mut HashMap<String, Vec<u8>>, changes: &mut Vec<Stri
             let decl = mat.as_str();
             if !encoding_re.is_match(decl) {
                 let trimmed = decl.trim_end();
-                let without_end = if trimmed.ends_with("?>") {
-                    &trimmed[..trimmed.len() - 2].trim_end()
-                } else {
-                    trimmed
-                };
+                let without_end = trimmed.strip_suffix("?>").map_or(trimmed, str::trim_end);
                 let fixed_decl = format!(r#"{} encoding="utf-8"?>"#, without_end);
                 let new_text = format!("{}{}", fixed_decl, &text[mat.end()..]);
                 files.insert(name.clone(), new_text.into_bytes());
@@ -232,7 +235,11 @@ pub fn fix_body_id_links(files: &mut HashMap<String, Vec<u8>>, changes: &mut Vec
                 return caps.get(0).unwrap().as_str().to_string();
             }
 
-            if !href.contains('#') || href.starts_with("http:") || href.starts_with("https:") || href.starts_with("mailto:") {
+            if !href.contains('#')
+                || href.starts_with("http:")
+                || href.starts_with("https:")
+                || href.starts_with("mailto:")
+            {
                 return caps.get(0).unwrap().as_str().to_string();
             }
 
@@ -374,7 +381,9 @@ pub fn validate_epub<P: AsRef<Path>>(path: P) -> Result<(), EpubFixError> {
     {
         let mut first_entry = archive.by_index(0)?;
         if !matches!(first_entry.name().as_deref(), Ok("mimetype")) {
-            return Err(EpubFixError::ValidationError("mimetype is not the first entry".to_string()));
+            return Err(EpubFixError::ValidationError(
+                "mimetype is not the first entry".to_string(),
+            ));
         }
         let mut mimetype_data = Vec::new();
         first_entry.read_to_end(&mut mimetype_data)?;
@@ -397,14 +406,17 @@ pub fn validate_epub<P: AsRef<Path>>(path: P) -> Result<(), EpubFixError> {
         names.push(name);
     }
 
-    let container_data = container_content
-        .ok_or_else(|| EpubFixError::ValidationError("META-INF/container.xml missing".to_string()))?;
+    let container_data =
+        container_content.ok_or_else(|| EpubFixError::ValidationError("META-INF/container.xml missing".to_string()))?;
 
     let mut temp_files = HashMap::new();
     temp_files.insert("META-INF/container.xml".to_string(), container_data);
     if let Some(opf) = find_opf_path(&temp_files) {
         if !names.contains(&opf) {
-            return Err(EpubFixError::ValidationError(format!("OPF {} referenced but missing", opf)));
+            return Err(EpubFixError::ValidationError(format!(
+                "OPF {} referenced but missing",
+                opf
+            )));
         }
     }
 
@@ -433,9 +445,7 @@ pub fn fix_epub<P: AsRef<Path>>(
     }
 
     let target_dir = target_path.parent().unwrap_or_else(|| Path::new("."));
-    let temp_file = tempfile::Builder::new()
-        .suffix(".epub")
-        .tempfile_in(target_dir)?;
+    let temp_file = tempfile::Builder::new().suffix(".epub").tempfile_in(target_dir)?;
 
     let temp_path = temp_file.path().to_path_buf();
     // Close temp_file handle so repack can overwrite it

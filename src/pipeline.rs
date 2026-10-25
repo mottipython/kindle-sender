@@ -1,6 +1,6 @@
+use regex::Regex;
 use std::fs;
 use std::path::{Path, PathBuf};
-use regex::Regex;
 use tempfile::tempdir;
 
 use crate::config::Config;
@@ -31,11 +31,7 @@ pub enum Status {
 impl ProcessResult {
     pub fn new<P: AsRef<Path>>(source: P) -> Self {
         let path = source.as_ref().to_path_buf();
-        let name = path
-            .file_name()
-            .unwrap_or_default()
-            .to_string_lossy()
-            .to_string();
+        let name = path.file_name().unwrap_or_default().to_string_lossy().to_string();
         Self {
             source: path,
             name,
@@ -83,12 +79,7 @@ pub fn safe_filename(name: &str) -> String {
     }
 }
 
-pub fn process_file<P, L, C>(
-    path: P,
-    cfg: &Config,
-    log: L,
-    cancelled: C,
-) -> ProcessResult
+pub fn process_file<P, L, C>(path: P, cfg: &Config, log: L, cancelled: C) -> ProcessResult
 where
     P: AsRef<Path>,
     L: Fn(&str),
@@ -112,10 +103,7 @@ where
         .map(|e| format!(".{}", e.to_lowercase()))
         .unwrap_or_default();
 
-    let stem = path_ref
-        .file_stem()
-        .and_then(|s| s.to_str())
-        .unwrap_or("book");
+    let stem = path_ref.file_stem().and_then(|s| s.to_str()).unwrap_or("book");
     let safe_stem = safe_filename(stem);
     let staged = work_dir.path().join(format!("{}.epub", safe_stem));
 
@@ -139,11 +127,7 @@ where
         }
     } else {
         result.status = Status::Skipped;
-        let suffix = if cfg.do_convert {
-            ""
-        } else {
-            " and conversion is off"
-        };
+        let suffix = if cfg.do_convert { "" } else { " and conversion is off" };
         result.error = Some(format!(
             "{} is not an epub{}",
             if ext.is_empty() { "no extension" } else { &ext },
@@ -209,7 +193,7 @@ where
         let out_dir = Path::new(&cfg.output_dir);
         let _ = fs::create_dir_all(out_dir);
         let final_path = out_dir.join(staged.file_name().unwrap());
-        if let Ok(_) = fs::copy(&staged, &final_path) {
+        if fs::copy(&staged, &final_path).is_ok() {
             result.output = Some(final_path);
         }
     }
@@ -243,7 +227,10 @@ mod tests {
     #[test]
     fn test_safe_filename() {
         assert_eq!(safe_filename("Normal Title"), "Normal Title");
-        assert_eq!(safe_filename("Title: With / Bad * Chars?"), "Title_ With _ Bad _ Chars_");
+        assert_eq!(
+            safe_filename("Title: With / Bad * Chars?"),
+            "Title_ With _ Bad _ Chars_"
+        );
         assert_eq!(safe_filename(""), "book");
     }
 

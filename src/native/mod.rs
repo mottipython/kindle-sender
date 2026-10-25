@@ -29,7 +29,9 @@ pub enum NativeError {
 }
 
 /// Extensions the built-in converters handle.
-pub const NATIVE_EXT: &[&str] = &[".mobi", ".azw", ".azw3", ".prc", ".txt", ".html", ".htm", ".xhtml", ".fb2", ".pdf"];
+pub const NATIVE_EXT: &[&str] = &[
+    ".mobi", ".azw", ".azw3", ".prc", ".txt", ".html", ".htm", ".xhtml", ".fb2", ".pdf",
+];
 
 pub fn handles(ext: &str) -> bool {
     NATIVE_EXT.contains(&ext)
