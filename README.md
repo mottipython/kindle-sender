@@ -206,8 +206,8 @@ How your account is protected:
   `0700` folder, and the Settings tab says which applies.
 - Attachments over 45 MB are refused locally instead of bouncing silently.
 
-These checks run automatically on GitHub: CI on every push, `cargo audit` on every
-push and weekly, AddressSanitizer fuzzing weekly, Dependabot update PRs, and
+These checks run automatically on GitHub: CI on every push, Snyk Code and `cargo audit` on
+every push and weekly, AddressSanitizer fuzzing weekly, Dependabot update PRs, and
 secret scanning. See [SECURITY.md](SECURITY.md) for the policy and how to report
 a vulnerability privately.
 

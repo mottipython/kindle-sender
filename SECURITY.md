@@ -21,12 +21,13 @@ run automatically on GitHub (see the badges in the README):
 | --- | --- | --- |
 | Build, tests, `clippy -D warnings`, `rustfmt` | every push and pull request | [CI](.github/workflows/ci.yml) |
 | `cargo audit` against the RustSec advisory database | every push, every pull request, and weekly | [Security](.github/workflows/security.yml) |
+| Snyk Code static analysis | every push and pull request, and weekly | [Security](.github/workflows/security.yml) |
 | Fuzzing of every parser with AddressSanitizer (EPUB, MOBI/AZW/AZW3, FB2, PDF, TXT, HTML, metadata) | weekly and on demand | [Security](.github/workflows/security.yml) |
 | Dependency update pull requests | weekly | [Dependabot](.github/dependabot.yml) |
 | Secret scanning with push protection | always on | GitHub |
 
-Snyk Code static analysis is also run locally before releases (0 issues at
-v1.1.0).
+Snyk's dependency scan does not support Cargo, so dependencies are covered by
+`cargo audit` and Dependabot instead.
 
 ## Design notes
 
