@@ -8,16 +8,19 @@ Send-to-Kindle address.
 
 ## What it does to each book
 
-1. **Convert** — anything calibre can read (mobi, azw3, lit, pdf, txt, docx,
-   cbz…) becomes an EPUB. Files already in EPUB pass straight through.
+1. **Convert** to EPUB. These formats are converted by the app itself, with
+   nothing else installed: **MOBI, AZW, AZW3 (KF8), PDF, FB2, TXT and HTML**.
+   Files already in EPUB pass straight through. LIT, RTF, DOC/DOCX, CBZ/CBR
+   and PDB need [calibre](https://calibre-ebook.com/) if you have it; calibre
+   is also tried as a fallback for any built-in conversion that fails.
 2. **Metadata** — if the book sits in a calibre library folder, the
    `metadata.opf` next to it wins. Otherwise title and author are parsed out of
    the filename (`Terry Pratchett - Mort.epub`), but only where the existing
-   fields are missing or are calibre's own guess.
+   fields are missing or are a placeholder.
 3. **Cover** — if the book has no cover, or only a flat placeholder, one is
    fetched from Open Library on a strict author-surname + title-word match.
    Real cover art is never replaced.
-4. **Kindle EPUB fix** — a Python port of
+4. **Kindle EPUB fix** — a Rust port of
    [kindle-epub-fix](https://github.com/innocenat/kindle-epub-fix):
    - adds the `<?xml … encoding="utf-8"?>` declaration Kindle needs — without
      it, every accented character turns to mojibake;
@@ -33,51 +36,50 @@ Send-to-Kindle address.
 Every step is a checkbox, so you can fix without sending, or send an
 already-good book untouched.
 
+### What the built-in converters can and cannot do
+
+| Format | Notes |
+| --- | --- |
+| MOBI / AZW | Text, images, table of contents and internal links are kept. |
+| AZW3 (KF8) | Same, including the stylesheet. |
+| FB2 | Text, images, cover, footnote links. |
+| TXT | Chapters are found from headings such as "Chapter 3" or "Part II". |
+| HTML | Split into one file per h1/h2; local images are embedded. |
+| PDF | Reflowable text only. Page numbers and running headers are dropped, hyphenated words rejoined. Images and layout are not kept, and scanned PDFs (no text layer) cannot be converted without OCR. |
+
+**DRM-protected books** (most Kindle store purchases) cannot be converted by
+anything here or in calibre; the app says so instead of producing garbage.
+
 ## Installing
 
-### RPM (Fedora, Nobara, RHEL…)
+Download a package from the
+[releases page](https://github.com/mottipython/kindle-sender/releases):
 
 ```bash
-sudo dnf install rpm-build rpmdevtools python3-devel desktop-file-utils
-./packaging/build-rpm.sh
-sudo dnf install ~/rpmbuild/RPMS/noarch/kindle-sender-*.noarch.rpm
+sudo dnf install ./kindle-sender-*.x86_64.rpm      # Fedora, Nobara, RHEL…
+sudo apt install ./kindle-sender_*_amd64.deb       # Debian, Ubuntu…
 ```
 
-### pipx / pip (any distro)
+or unpack the `.tar.gz` and run `kindle-sender`. To build from source:
 
 ```bash
-pipx install 'kindle-sender[all] @ git+https://github.com/mottipython/kindle-sender'
+cargo build --release          # needs a Rust toolchain
+./target/release/kindle-sender # GUI; `kindle-sender --help` lists the CLI
 ```
 
-### From the source tree, no install
-
-```bash
-./packaging/setup-dev-venv.sh
-./run.sh
-```
-
-### Dependencies
-
-Only `python3` and `python3-tkinter` are required. Everything else is optional
-and the app degrades cleanly without it:
-
-| Optional | Enables | Without it |
-| --- | --- | --- |
-| **calibre** | conversion, metadata, cover embedding | EPUB repair and email still work; other formats are skipped |
-| `keyring` + `SecretStorage` | password in the system wallet | password stored in the config file, mode 0600 |
-| `tkinterdnd2` | drag-and-drop onto the book list | use the Add files button |
-| `Pillow` | detecting flat placeholder covers | covers are left alone |
+No Python is involved. Nothing else is required; calibre is optional (above),
+and a system wallet (KWallet or GNOME Keyring) is used for the password when
+one is running.
 
 ## Setup
 
-The app opens on the **Settings** tab until email is configured, and a banner
-says exactly what is still missing. Three steps:
+Open the **Settings** tab until email is configured; the status bar says what
+is still missing. Three steps:
 
 **Step 1 — Where books go.** Your Kindle address (`something@kindle.com`) and
 the address you send from. If calibre is set up on the machine, both are
 pre-filled from its email settings — but treat that as a guess and check it,
-because calibre's copy is often stale. The app flags an unchecked
-calibre-derived address until you either edit it or mark it verified.
+because calibre's copy is often stale.
 
 Two ways to get this wrong, and **both fail identically and silently** —
 Amazon accepts the mail, drops it, and sends no bounce and no confirmation:
@@ -100,8 +102,7 @@ paste it into the App password field. The spaces are stripped for you, and
 work here; Gmail rejects it outright.
 
 **Step 3 — Check it works.** **Test connection** logs in and hangs up without
-sending anything, reporting the result inline. **Send a test book…** runs one
-book all the way through.
+sending anything, reporting the result inline.
 
 ### Where the password is kept
 
@@ -113,7 +114,7 @@ else in that file is sensitive.
 
 ## Adding books
 
-- Drag them onto the list, or use **Add files…** / **Add folder…** (recursive).
+- Use **Add files…** / **Add folder…** (recursive).
 - Or turn on **watch folder** in Settings: anything dropped into
   `~/Downloads/to-kindle` is processed automatically, then moved into `sent/`
   or `failed/` inside that folder so nothing is handled twice. Watch mode uses
@@ -126,34 +127,35 @@ file to push it.
 ## Layout
 
 ```
-kindle_sender/
-  epub_fix.py     the four Kindle fixes, stdlib only, atomic repack + validate
-  ebook_tools.py  calibre CLI wrappers: convert, metadata, Open Library covers
-  sender.py       SMTP delivery
-  config.py       settings; password via system wallet, file as fallback
-  pipeline.py     convert -> metadata -> cover -> fix -> send, per book
-  watcher.py      polling folder watch (safe on half-copied downloads)
-  gui.py          tkinter UI; all work runs on a worker thread
-packaging/        .spec, .desktop, icon, build scripts
-tests/            builds deliberately broken epubs and asserts each fix
+src/
+  native/         built-in converters: mobi.rs (MOBI6 + KF8), text.rs (txt, html, fb2),
+                  pdf.rs, epub_writer.rs, epub_meta.rs (metadata + cover editing)
+  epub_fix.rs     the four Kindle fixes, atomic repack + validate
+  ebook_tools.rs  conversion routing (built-in, then calibre), metadata, Open Library covers
+  sender.rs       SMTP delivery
+  config.rs       settings; password via system wallet, file as fallback
+  pipeline.rs     convert -> metadata -> cover -> fix -> send, per book
+  watcher.rs      polling folder watch (safe on half-copied downloads)
+  gui.rs, ui/     Slint desktop UI; all work runs on a worker thread
+examples/         native_check: converts files and verifies the EPUBs
+fuzz/             cargo-fuzz targets for every parser
+packaging/        .desktop, icons, package build script
+tests/            fixtures in every built-in format, run through the whole
+                  pipeline with an empty PATH (so calibre cannot be the reason it works)
 ```
 
 ```bash
-python3 tests/test_epub_fix.py
+cargo test --release
+cargo run --release --example native_check -- some.mobi other.azw3 book.pdf
 ```
-
-No network, no calibre and no display needed — it constructs broken EPUBs in a
-temp dir, asserts every fix fires, and checks the result is a valid archive
-that a second pass leaves alone.
 
 ## Notes
 
-- Calls the native calibre binaries. A Flatpak calibre works but launching the
-  sandbox once per file is drastically slower.
-- Converting formats that carry no metadata of their own (txt, pdf, rtf, docx,
-  html, cbz) makes calibre invent a title and author from the filename — often
-  putting the title in the author field. For those formats this app parses the
-  filename itself instead of trusting the result.
+- Converting formats that carry little metadata (txt, pdf, html…) leaves the
+  title and author to be guessed; for those the app parses the filename
+  instead of trusting the result.
+- Fuzzing: `cd fuzz && RUSTC_BOOTSTRAP=1 cargo fuzz run -s none native_convert -- -fork=8`
+  (stable Rust; drop `-s none` on nightly for AddressSanitizer).
 
 ## License
 

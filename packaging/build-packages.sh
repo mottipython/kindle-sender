@@ -3,12 +3,16 @@ set -euo pipefail
 
 REPO_DIR="$(cd "$(dirname "$0")/.." && pwd)"
 DIST_DIR="${REPO_DIR}/dist"
-VERSION="1.0.2"
+VERSION="$(sed -n 's/^version = "\(.*\)"/\1/p' "${REPO_DIR}/Cargo.toml" | head -1)"
 
-echo "=== Building Kindle Sender Release Binary ==="
-cargo build --release --manifest-path "${REPO_DIR}/Cargo.toml"
-
-BIN="${REPO_DIR}/target/release/kindle-sender"
+# KS_BIN lets a binary built elsewhere (e.g. in an older-glibc container, so the
+# .deb and tarball run on Debian/Ubuntu) be packaged instead of building here.
+if [ -z "${KS_BIN:-}" ]; then
+    echo "=== Building Kindle Sender Release Binary ==="
+    cargo build --release --manifest-path "${REPO_DIR}/Cargo.toml"
+    KS_BIN="${REPO_DIR}/target/release/kindle-sender"
+fi
+BIN="${KS_BIN}"
 DESKTOP="${REPO_DIR}/packaging/kindle-sender.desktop"
 ICON_SVG="${REPO_DIR}/packaging/kindle-sender.svg"
 ICONS_DIR="${REPO_DIR}/packaging/icons"
@@ -63,6 +67,10 @@ done
 %{_datadir}/icons/hicolor/*/apps/kindle-sender.*
 
 %changelog
+* Sun Oct 25 2026 Motti Schleider <motti.schleider@gmail.com> - 1.1.0-1
+- Built-in MOBI, AZW, AZW3, PDF, FB2, TXT and HTML converters; calibre is now optional
+- Metadata and cover editing without calibre
+
 * Sun Oct 25 2026 Motti Schleider <motti.schleider@gmail.com> - 1.0.2-1
 - Fix book names invisible in dark themes
 - Always send from the GUI and watch folder (stale do_send=false made sends dry runs)
@@ -117,6 +125,7 @@ Description: Fix EPUBs for Kindle and send them to your device by email
  Kindle Sender takes any ebook, converts it to EPUB if needed, repairs the
  things that break on a Kindle, tidies its metadata and cover, and emails it to
  your Send-to-Kindle address.
+Depends: libc6, libssl3 | libssl3t64, libdbus-1-3, libfontconfig1
 Recommends: calibre
 CTRL
 
@@ -131,5 +140,17 @@ rm -rf "${DEB_TMP}"
 
 echo "DEB created in dist/"
 
+# -------------------------------------------------------------
+# 3. Generic tarball
+# -------------------------------------------------------------
+echo "=== Packaging tarball ==="
+TAR_TMP=$(mktemp -d /tmp/ks-tar-build-XXXXXX)
+TAR_DIR="kindle-sender-${VERSION}-linux-x86_64"
+mkdir -p "${TAR_TMP}/${TAR_DIR}"
+install -m 0755 "${BIN}" "${TAR_TMP}/${TAR_DIR}/kindle-sender"
+cp "${REPO_DIR}/README.md" "${REPO_DIR}/LICENSE" "${DESKTOP}" "${ICON_SVG}" "${TAR_TMP}/${TAR_DIR}/"
+tar czf "${DIST_DIR}/${TAR_DIR}.tar.gz" -C "${TAR_TMP}" "${TAR_DIR}"
+rm -rf "${TAR_TMP}"
+
 echo "=== Generated Packages in ${DIST_DIR} ==="
-ls -lh "${DIST_DIR}"/*.rpm "${DIST_DIR}"/*.deb
+ls -lh "${DIST_DIR}"/*"${VERSION}"*

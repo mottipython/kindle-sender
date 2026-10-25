@@ -1,0 +1,39 @@
+[package]
+name = "kindle-sender-fuzz"
+version = "0.0.0"
+publish = false
+edition = "2021"
+
+[package.metadata]
+cargo-fuzz = true
+
+[dependencies]
+libfuzzer-sys = "0.4"
+tempfile = "3.10"
+kindle-sender = { path = ".." }
+
+[workspace]
+
+[[bin]]
+name = "epub_archive"
+path = "fuzz_targets/epub_archive.rs"
+test = false
+doc = false
+
+[[bin]]
+name = "text_and_markup"
+path = "fuzz_targets/text_and_markup.rs"
+test = false
+doc = false
+
+[[bin]]
+name = "native_convert"
+path = "fuzz_targets/native_convert.rs"
+test = false
+doc = false
+
+[[bin]]
+name = "epub_meta"
+path = "fuzz_targets/epub_meta.rs"
+test = false
+doc = false

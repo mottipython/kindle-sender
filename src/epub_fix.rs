@@ -67,7 +67,7 @@ pub fn read_all<P: AsRef<Path>>(path: P) -> Result<(Vec<String>, HashMap<String,
 
     for i in 0..archive.len() {
         let mut entry = archive.by_index(i).map_err(|e| EpubFixError::CorruptEntry(e.to_string()))?;
-        let name = entry.name().to_string();
+        let name = entry.name().map(|n| n.into_owned()).unwrap_or_default();
         let mut data = Vec::with_capacity(entry.size() as usize);
         entry.read_to_end(&mut data).map_err(|e| EpubFixError::CorruptEntry(format!("{}: {}", name, e)))?;
         names.push(name.clone());
@@ -373,7 +373,7 @@ pub fn validate_epub<P: AsRef<Path>>(path: P) -> Result<(), EpubFixError> {
     // Verify first entry is mimetype
     {
         let mut first_entry = archive.by_index(0)?;
-        if first_entry.name() != "mimetype" {
+        if !matches!(first_entry.name().as_deref(), Ok("mimetype")) {
             return Err(EpubFixError::ValidationError("mimetype is not the first entry".to_string()));
         }
         let mut mimetype_data = Vec::new();
@@ -388,7 +388,7 @@ pub fn validate_epub<P: AsRef<Path>>(path: P) -> Result<(), EpubFixError> {
     let mut container_content = None;
     for i in 0..archive.len() {
         let mut entry = archive.by_index(i)?;
-        let name = entry.name().to_string();
+        let name = entry.name().map(|n| n.into_owned()).unwrap_or_default();
         let mut buf = Vec::new();
         entry.read_to_end(&mut buf)?;
         if name == "META-INF/container.xml" {
