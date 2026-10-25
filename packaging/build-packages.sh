@@ -67,6 +67,11 @@ done
 %{_datadir}/icons/hicolor/*/apps/kindle-sender.*
 
 %changelog
+* Sun Oct 25 2026 Motti Schleider <motti.schleider@gmail.com> - 1.1.1-1
+- Code cleanup, clippy and rustfmt clean
+- Dependency updates (rfd 0.17, dirs 7); MOBI book ids now come from file contents
+- Security policy, CI, fuzzing and Snyk on GitHub
+
 * Sun Oct 25 2026 Motti Schleider <motti.schleider@gmail.com> - 1.1.0-1
 - Built-in MOBI, AZW, AZW3, PDF, FB2, TXT and HTML converters; calibre is now optional
 - Metadata and cover editing without calibre
