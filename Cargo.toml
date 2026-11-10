@@ -28,7 +28,7 @@ encoding_rs = "0.8.42"
 roxmltree = "0.21.2"
 base64 = "0.23.1"
 html5ever = "0.39"
-markup5ever_rcdom = "0.39.0"
+markup5ever_rcdom = "0.40.1"
 pdf-extract = "0.12.1"
 
 [dev-dependencies]
